@@ -164,8 +164,8 @@ class RIWAPOSAPITester:
             "tax": 0.075,
             "service_charge": 0,
             "delivery_fee": 0,
-            "total": 1.575
-            # Removed payment_method as it's causing schema error
+            "total": 1.575,
+            "payment_method": "cash"  # Required field
         }
         
         success, response = self.run_test(
