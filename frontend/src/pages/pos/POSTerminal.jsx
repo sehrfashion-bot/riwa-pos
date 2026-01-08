@@ -610,8 +610,8 @@ const POSTerminal = () => {
           </ScrollArea>
         </div>
 
-        {/* Cart Sidebar - Desktop Only */}
-        <div className={`hidden md:flex w-80 lg:w-96 flex-col pos-sidebar ${isRTL ? 'border-r' : 'border-l'} border-border/30`}>
+        {/* Cart Sidebar - Desktop Only (visible on lg screens and up) */}
+        <div className={`hidden lg:flex w-80 lg:w-96 flex-col pos-sidebar ${isRTL ? 'border-r' : 'border-l'} border-border/30`}>
           <CartContent />
         </div>
       </div>
