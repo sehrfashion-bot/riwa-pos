@@ -9,6 +9,7 @@ class RIWAPOSAPITester:
     def __init__(self, base_url="https://fastpos-riwa.preview.emergentagent.com/api"):
         self.base_url = base_url
         self.token = None
+        self.created_order_id = None
         self.tests_run = 0
         self.tests_passed = 0
         self.failed_tests = []
