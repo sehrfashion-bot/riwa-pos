@@ -141,7 +141,7 @@ async def pin_login(request: PinLoginRequest):
         # Query all users with PIN (without tenant filter for backward compatibility)
         response = await supabase_request(
             "GET",
-            f"users?pin=neq.null&select=id,name,name_ar,role,pin,branch_id,tenant_id",
+            f"users?pin=neq.null&select=id,name,role,pin,branch_id,tenant_id",
             use_service_key=True
         )
         
@@ -174,7 +174,7 @@ async def pin_login(request: PinLoginRequest):
                         "user": {
                             "id": user['id'],
                             "name": user['name'],
-                            "name_ar": user.get('name_ar'),
+                            "name_ar": user.get('name'),  # Use name as fallback
                             "role": user['role']
                         }
                     }
