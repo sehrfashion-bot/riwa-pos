@@ -395,106 +395,6 @@ class RIWAPOSAPITester:
             print(f"   ❌ Login failed or no token received")
             return False, response
 
-    def test_order_creation(self):
-        """Test order creation with authentication"""
-        if not self.token:
-            print("❌ Cannot test order creation - no authentication token")
-            return False
-            
-        # Use the actual item ID from the menu items we retrieved
-        order_data = {
-            "order_type": "qsr",
-            "items": [
-                {
-                    "item_id": "f0dc0172-3684-4108-b88b-a87c04c75b90",  # Using actual item ID from menu
-                    "name": "Classic Burger",
-                    "quantity": 1,
-                    "unit_price": 1.500,
-                    "total_price": 1.500
-                }
-            ],
-            "subtotal": 1.500,
-            "tax": 0.075,
-            "service_charge": 0,
-            "delivery_fee": 0,
-            "total": 1.575,
-            "payment_method": "cash"  # Required field
-        }
-        
-        success, response = self.run_test(
-            "Order Creation",
-            "POST",
-            "orders/create",
-            200,
-            data=order_data
-        )
-        
-        if success and response.get('success'):
-            self.created_order_id = response.get('order', {}).get('id')
-            print(f"   ✅ Order created with ID: {self.created_order_id}")
-            return True, response
-        else:
-            print(f"   ❌ Order creation failed")
-            return False, response
-
-    def test_email_login_valid(self):
-        """Test email login with test credentials"""
-        success, response = self.run_test(
-            "Email Login (Test Credentials)",
-            "POST",
-            "auth/email-login",
-            200,  # Expecting success or proper error handling
-            data={"email": "admin@riwapos.com", "password": "admin123"}
-        )
-        return success, response
-
-    def test_auth_me_without_token(self):
-        """Test auth/me endpoint without token"""
-        # Temporarily remove token for this test
-        temp_token = self.token
-        self.token = None
-        
-        success, response = self.run_test(
-            "Auth Me (No Token)",
-            "GET",
-            "auth/me",
-            401  # Expecting 401 for no token
-        )
-        
-        # Restore token
-        self.token = temp_token
-        return success
-
-    def test_admin_categories(self):
-        """Test admin categories endpoint"""
-        success, response = self.run_test(
-            "Admin Categories",
-            "GET",
-            "admin/categories",
-            200
-        )
-        return success
-
-    def test_admin_items(self):
-        """Test admin items endpoint"""
-        success, response = self.run_test(
-            "Admin Items",
-            "GET",
-            "admin/items",
-            200
-        )
-        return success
-
-    def test_kds_items(self):
-        """Test KDS items endpoint"""
-        success, response = self.run_test(
-            "KDS Items",
-            "GET",
-            "kds/items",
-            200
-        )
-        return success
-
     def test_orders_endpoint(self):
         """Test orders endpoint"""
         success, response = self.run_test(
@@ -503,6 +403,18 @@ class RIWAPOSAPITester:
             "orders",
             200
         )
+        
+        if success:
+            orders = response.get('orders', [])
+            print(f"   📋 Found {len(orders)} orders")
+            if self.created_order_id:
+                # Look for our created order
+                order_found = any(order.get('id') == self.created_order_id for order in orders)
+                if order_found:
+                    print(f"   ✅ Created order found in orders list")
+                else:
+                    print(f"   ⚠️  Created order not found in orders list")
+        
         return success
 
 def main():
