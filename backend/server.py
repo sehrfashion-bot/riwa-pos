@@ -822,6 +822,7 @@ async def admin_get_items():
             item['name'] = item.get('name_en', item.get('name', ''))
             item['name_ar'] = item.get('name_ar', '')
             item['is_active'] = item.get('status') == 'active'
+            item['price'] = item.get('base_price', 0)
         
         return {"items": items}
     except Exception as e:
@@ -834,17 +835,21 @@ async def admin_create_item(item: Dict[str, Any]):
     try:
         item['id'] = str(uuid.uuid4())
         item['tenant_id'] = TENANT_ID
-        item['branch_id'] = BRANCH_ID
         item['name_en'] = item.pop('name', '')
+        if 'price' in item:
+            item['base_price'] = item.pop('price')
         item['status'] = 'active' if item.pop('is_active', True) else 'inactive'
         item['created_at'] = datetime.now(timezone.utc).isoformat()
         
         response = await supabase_request("POST", "items", item, use_service_key=True)
         
         if response.status_code not in [200, 201]:
+            logger.error(f"Create item failed: {response.status_code} - {response.text}")
             raise HTTPException(status_code=500, detail="Failed to create item")
         
-        return {"success": True, "item": response.json()[0] if response.json() else item}
+        result = response.json()[0] if response.json() else item
+        result['price'] = result.get('base_price', 0)
+        return {"success": True, "item": result}
     except HTTPException:
         raise
     except Exception as e:
@@ -857,6 +862,8 @@ async def admin_update_item(item_id: str, item: Dict[str, Any]):
     try:
         if 'name' in item:
             item['name_en'] = item.pop('name')
+        if 'price' in item:
+            item['base_price'] = item.pop('price')
         if 'is_active' in item:
             item['status'] = 'active' if item.pop('is_active') else 'inactive'
         item['updated_at'] = datetime.now(timezone.utc).isoformat()
