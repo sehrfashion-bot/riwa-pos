@@ -13,6 +13,7 @@ import { Badge } from '../../components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { ScrollArea } from '../../components/ui/scroll-area';
+import { printReceipt } from '../../utils/receipt';
 
 // Supabase client for realtime
 const supabaseUrl = 'https://sqhjsctsxlnivcbeclrn.supabase.co';
