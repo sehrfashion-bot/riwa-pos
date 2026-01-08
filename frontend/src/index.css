@@ -8,29 +8,35 @@
 
 @layer base {
   :root {
-    --background: 0 0% 3.5%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 7%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 7%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 38 92% 50%;
-    --primary-foreground: 0 0% 3.5%;
-    --secondary: 0 0% 15%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 63%;
-    --accent: 38 92% 50%;
-    --accent-foreground: 0 0% 3.5%;
+    /* New Color Palette */
+    /* Primary: #1e3a5f (Deep Navy) - HSL: 212, 52%, 25% */
+    /* Secondary: #a8c5e6 (Soft Pastel Blue) - HSL: 211, 54%, 78% */
+    /* Accent: #d4af37 (Muted Gold) - HSL: 45, 64%, 52% */
+    /* Background: #f5f7fa (Light Gray) - HSL: 220, 33%, 97% */
+    
+    --background: 220 33% 97%;
+    --foreground: 212 52% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 212 52% 15%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 212 52% 15%;
+    --primary: 212 52% 25%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 211 54% 78%;
+    --secondary-foreground: 212 52% 15%;
+    --muted: 211 25% 90%;
+    --muted-foreground: 212 30% 45%;
+    --accent: 45 64% 52%;
+    --accent-foreground: 212 52% 15%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 15%;
-    --input: 0 0% 15%;
-    --ring: 38 92% 50%;
+    --border: 211 25% 85%;
+    --input: 211 25% 90%;
+    --ring: 45 64% 52%;
     --radius: 0.75rem;
     --success: 160 84% 39%;
-    --warning: 38 92% 50%;
-    --info: 217 91% 60%;
+    --warning: 45 64% 52%;
+    --info: 212 52% 45%;
   }
 }
 
