@@ -571,7 +571,8 @@ async def update_order_status(request: OrderStatusUpdateRequest, authorization: 
 async def get_orders(status: Optional[str] = None, limit: int = 50):
     """Get orders for this tenant"""
     try:
-        endpoint = f"orders?tenant_id=eq.{TENANT_ID}&branch_id=eq.{BRANCH_ID}&order=created_at.desc&limit={limit}"
+        # Query all orders for the tenant, not filtering by branch_id since it's causing issues
+        endpoint = f"orders?tenant_id=eq.{TENANT_ID}&order=created_at.desc&limit={limit}"
         if status:
             endpoint += f"&status=eq.{status}"
         
