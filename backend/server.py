@@ -307,9 +307,20 @@ async def get_current_user(authorization: str = Header(None)):
 async def get_categories():
     """Get all menu categories"""
     try:
+        # Try with specified tenant first, then fallback
         response = await supabase_request(
             "GET",
-            f"categories?tenant_id=eq.{TENANT_ID}&branch_id=eq.{BRANCH_ID}&is_active=eq.true&order=sort_order.asc",
+            f"categories?tenant_id=eq.{TENANT_ID}&is_active=eq.true&order=sort_order.asc",
+            use_service_key=True
+        )
+        
+        if response.status_code == 200 and response.json():
+            return {"categories": response.json()}
+        
+        # Fallback to existing tenant data
+        response = await supabase_request(
+            "GET",
+            f"categories?tenant_id=eq.{FALLBACK_TENANT_ID}&is_active=eq.true&order=sort_order.asc",
             use_service_key=True
         )
         
@@ -325,7 +336,18 @@ async def get_categories():
 async def get_items(category_id: Optional[str] = None):
     """Get menu items, optionally filtered by category"""
     try:
-        endpoint = f"items?tenant_id=eq.{TENANT_ID}&branch_id=eq.{BRANCH_ID}&is_active=eq.true&order=sort_order.asc"
+        # Try with specified tenant first
+        endpoint = f"items?tenant_id=eq.{TENANT_ID}&is_active=eq.true&order=sort_order.asc"
+        if category_id:
+            endpoint += f"&category_id=eq.{category_id}"
+        
+        response = await supabase_request("GET", endpoint, use_service_key=True)
+        
+        if response.status_code == 200 and response.json():
+            return {"items": response.json()}
+        
+        # Fallback to existing tenant data
+        endpoint = f"items?tenant_id=eq.{FALLBACK_TENANT_ID}&is_active=eq.true&order=sort_order.asc"
         if category_id:
             endpoint += f"&category_id=eq.{category_id}"
         
