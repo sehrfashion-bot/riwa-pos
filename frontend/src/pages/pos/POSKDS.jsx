@@ -67,73 +67,53 @@ const POSKDS = () => {
   useEffect(() => {
     loadKDSItems();
 
-    // Subscribe to kds_items table changes
-    const channel = supabase
-      .channel('kds-realtime')
+    // Subscribe to orders and order_items tables for real-time updates
+    const ordersChannel = supabase
+      .channel('kds-orders-realtime')
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
-          table: 'kds_items'
+          table: 'orders'
         },
         (payload) => {
-          console.log('New KDS item:', payload);
-          // Add new item to list
-          const newItem = payload.new;
-          setKdsItems(prev => {
-            // Check if already exists
-            if (prev.some(item => item.id === newItem.id)) {
-              return prev;
-            }
-            return [newItem, ...prev];
-          });
+          console.log('Order change:', payload);
+          // Reload items when orders change
+          loadKDSItems();
           
-          // Play buzzer for new order
-          if (buzzerEnabled) {
+          if (payload.eventType === 'INSERT' && buzzerEnabled) {
+            playBuzzer();
+            toast.info(t('New order received!', 'تم استلام طلب جديد!'));
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'order_items'
+        },
+        (payload) => {
+          console.log('Order item change:', payload);
+          // Reload items when order_items change
+          loadKDSItems();
+          
+          if (payload.eventType === 'INSERT' && buzzerEnabled) {
             playBuzzer();
           }
-          toast.info(t('New order received!', 'تم استلام طلب جديد!'));
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'kds_items'
-        },
-        (payload) => {
-          console.log('KDS item updated:', payload);
-          const updatedItem = payload.new;
-          setKdsItems(prev => 
-            prev.map(item => 
-              item.id === updatedItem.id ? updatedItem : item
-            ).filter(item => item.status !== 'completed')
-          );
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'kds_items'
-        },
-        (payload) => {
-          console.log('KDS item deleted:', payload);
-          setKdsItems(prev => prev.filter(item => item.id !== payload.old.id));
         }
       )
       .subscribe((status) => {
-        console.log('Supabase subscription status:', status);
+        console.log('Supabase KDS subscription status:', status);
       });
 
-    subscriptionRef.current = channel;
+    subscriptionRef.current = ordersChannel;
 
     return () => {
-      if (channel) {
-        supabase.removeChannel(channel);
+      if (ordersChannel) {
+        supabase.removeChannel(ordersChannel);
       }
     };
   }, [station, buzzerEnabled]);
