@@ -8,6 +8,7 @@ import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
+import { printKDSTicket } from '../../utils/receipt';
 
 // Supabase client for realtime
 const supabaseUrl = 'https://sqhjsctsxlnivcbeclrn.supabase.co';
