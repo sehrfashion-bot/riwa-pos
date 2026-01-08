@@ -175,41 +175,9 @@ const POSKDS = () => {
   };
 
   // Print ticket
+  // Use the receipt utility for printing KDS tickets
   const printTicket = (item) => {
-    const printWindow = window.open('', '_blank', 'width=300,height=400');
-    if (printWindow) {
-      const modifiers = typeof item.modifiers === 'string' ? JSON.parse(item.modifiers || '[]') : (item.modifiers || []);
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>KDS Ticket</title>
-            <style>
-              body { font-family: 'Courier New', monospace; font-size: 12px; padding: 10px; }
-              .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; }
-              .item { margin: 10px 0; }
-              .qty { font-size: 24px; font-weight: bold; }
-              .modifiers { font-size: 10px; color: #666; }
-            </style>
-          </head>
-          <body>
-            <div class="header">
-              <strong>KDS TICKET</strong><br/>
-              Order: ${item.order_number || item.order?.order_number || 'N/A'}<br/>
-              ${new Date(item.created_at).toLocaleString()}
-            </div>
-            <div class="item">
-              <div class="qty">x${item.quantity}</div>
-              <div><strong>${item.item_name}</strong></div>
-              ${item.item_name_ar ? `<div>${item.item_name_ar}</div>` : ''}
-              ${modifiers.length > 0 ? `<div class="modifiers">${modifiers.map(m => m.name).join(', ')}</div>` : ''}
-              ${item.notes ? `<div class="modifiers">Note: ${item.notes}</div>` : ''}
-            </div>
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
-      printWindow.print();
-    }
+    printKDSTicket(item);
   };
 
   // Group items by order
