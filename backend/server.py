@@ -1,81 +1,37 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List
+from pydantic import BaseModel, Field
+from typing import List, Optional, Any, Dict
 import uuid
 from datetime import datetime, timezone
-
+import hashlib
+import hmac
+import json
+import httpx
+from jose import jwt, JWTError
+import bcrypt
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+# Supabase configuration
+SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://sqhjsctsxlnivcbeclrn.supabase.co')
+SUPABASE_ANON_KEY = os.environ.get('SUPABASE_PUBLIC_ANON_KEY', '')
+SUPABASE_SERVICE_KEY = os.environ.get('SUPABASE_SECRET_SERVICE_ROLE_KEY', '')
+JWT_SECRET = os.environ.get('SUPABASE_LEGACY_JWT_SECRET', '')
+TENANT_ID = os.environ.get('TENANT_ID', 'af8d6568-fb4d-43ce-a97d-8cebca6a44d9')
+BRANCH_ID = os.environ.get('BRANCH_ID', 'd73bf34c-5c8c-47c8-9518-b85c7447ebde')
 
-# Create the main app without a prefix
-app = FastAPI()
+# Create the main app
+app = FastAPI(title="RIWA POS API")
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
-
-
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
-    
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class StatusCheckCreate(BaseModel):
-    client_name: str
-
-# Add your routes to the router instead of directly to app
-@api_router.get("/")
-async def root():
-    return {"message": "Hello World"}
-
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
-    
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
-    
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
-
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
-    
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
-    
-    return status_checks
-
-# Include the router in the main app
-app.include_router(api_router)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Configure logging
 logging.basicConfig(
@@ -84,6 +40,1235 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+# ==================== MODELS ====================
+
+class PinLoginRequest(BaseModel):
+    pin: str
+
+class EmailLoginRequest(BaseModel):
+    email: str
+    password: str
+
+class OrderCreateRequest(BaseModel):
+    order_type: str  # QSR, Takeaway, Delivery
+    items: List[Dict[str, Any]]
+    subtotal: float
+    tax: float
+    service_charge: float = 0
+    delivery_fee: float = 0
+    total: float
+    payment_method: str  # cash, card
+    cash_received: Optional[float] = None
+    change_due: Optional[float] = None
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    customer_address: Optional[str] = None
+    notes: Optional[str] = None
+    idempotency_key: Optional[str] = None
+
+class OrderStatusUpdateRequest(BaseModel):
+    order_id: str
+    status: str
+
+class KDSBumpRequest(BaseModel):
+    kds_item_id: str
+
+class PrinterConfigRequest(BaseModel):
+    printer_ip: str
+    printer_port: int = 9100
+    printer_name: Optional[str] = None
+    paper_width: int = 80  # mm
+
+class ApiKeyRequest(BaseModel):
+    provider: str
+    api_key: str
+    api_secret: Optional[str] = None
+    is_test: bool = True
+
+# ==================== HELPER FUNCTIONS ====================
+
+async def supabase_request(method: str, endpoint: str, data: Optional[Dict] = None, use_service_key: bool = False):
+    """Make authenticated request to Supabase"""
+    key = SUPABASE_SERVICE_KEY if use_service_key else SUPABASE_ANON_KEY
+    headers = {
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation"
+    }
+    
+    url = f"{SUPABASE_URL}/rest/v1/{endpoint}"
+    
+    async with httpx.AsyncClient() as client:
+        if method == "GET":
+            response = await client.get(url, headers=headers)
+        elif method == "POST":
+            response = await client.post(url, headers=headers, json=data)
+        elif method == "PATCH":
+            response = await client.patch(url, headers=headers, json=data)
+        elif method == "DELETE":
+            response = await client.delete(url, headers=headers)
+        else:
+            raise ValueError(f"Unsupported method: {method}")
+        
+        return response
+
+async def verify_pin(pin: str, hashed_pin: str) -> bool:
+    """Verify PIN against hashed version"""
+    try:
+        return bcrypt.checkpw(pin.encode('utf-8'), hashed_pin.encode('utf-8'))
+    except Exception:
+        # Fallback to simple hash comparison if bcrypt fails
+        return hashlib.sha256(pin.encode()).hexdigest() == hashed_pin
+
+def generate_order_number() -> str:
+    """Generate unique order number"""
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    random_suffix = str(uuid.uuid4())[:4].upper()
+    return f"ORD-{timestamp}-{random_suffix}"
+
+# ==================== AUTH ENDPOINTS ====================
+
+@api_router.post("/auth/pin-login")
+async def pin_login(request: PinLoginRequest):
+    """Login with PIN (for cashiers)"""
+    try:
+        # Query users with PIN
+        response = await supabase_request(
+            "GET",
+            f"users?tenant_id=eq.{TENANT_ID}&select=id,name,name_ar,role,pin,branch_id",
+            use_service_key=True
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail="Database error")
+        
+        users = response.json()
+        
+        for user in users:
+            if user.get('pin'):
+                if await verify_pin(request.pin, user['pin']):
+                    # Generate session token
+                    token_data = {
+                        "user_id": user['id'],
+                        "role": user['role'],
+                        "branch_id": user.get('branch_id', BRANCH_ID),
+                        "tenant_id": TENANT_ID,
+                        "exp": datetime.now(timezone.utc).timestamp() + 86400  # 24h
+                    }
+                    token = jwt.encode(token_data, JWT_SECRET, algorithm="HS256")
+                    
+                    return {
+                        "success": True,
+                        "token": token,
+                        "user": {
+                            "id": user['id'],
+                            "name": user['name'],
+                            "name_ar": user.get('name_ar'),
+                            "role": user['role']
+                        }
+                    }
+        
+        raise HTTPException(status_code=401, detail="Invalid PIN")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"PIN login error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/auth/email-login")
+async def email_login(request: EmailLoginRequest):
+    """Login with email/password via Supabase Auth"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
+                headers={
+                    "apikey": SUPABASE_ANON_KEY,
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "email": request.email,
+                    "password": request.password
+                }
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(status_code=401, detail="Invalid credentials")
+            
+            auth_data = response.json()
+            user_id = auth_data['user']['id']
+            
+            # Link/get user from public.users
+            user_response = await supabase_request(
+                "GET",
+                f"users?id=eq.{user_id}&tenant_id=eq.{TENANT_ID}",
+                use_service_key=True
+            )
+            
+            users = user_response.json() if user_response.status_code == 200 else []
+            
+            if not users:
+                # Create user record if not exists
+                new_user = {
+                    "id": user_id,
+                    "tenant_id": TENANT_ID,
+                    "branch_id": BRANCH_ID,
+                    "email": request.email,
+                    "name": request.email.split('@')[0],
+                    "role": "admin",
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                }
+                await supabase_request("POST", "users", new_user, use_service_key=True)
+                user = new_user
+            else:
+                user = users[0]
+            
+            return {
+                "success": True,
+                "token": auth_data['access_token'],
+                "refresh_token": auth_data.get('refresh_token'),
+                "user": {
+                    "id": user_id,
+                    "name": user.get('name', request.email),
+                    "name_ar": user.get('name_ar'),
+                    "role": user.get('role', 'admin'),
+                    "email": request.email
+                }
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Email login error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/auth/me")
+async def get_current_user(authorization: str = Header(None)):
+    """Get current user info"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No authorization header")
+    
+    try:
+        token = authorization.replace("Bearer ", "")
+        
+        # Try decoding as our custom token first
+        try:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+            return {
+                "id": payload.get('user_id'),
+                "role": payload.get('role'),
+                "branch_id": payload.get('branch_id'),
+                "tenant_id": payload.get('tenant_id')
+            }
+        except JWTError:
+            pass
+        
+        # Try as Supabase token
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{SUPABASE_URL}/auth/v1/user",
+                headers={
+                    "apikey": SUPABASE_ANON_KEY,
+                    "Authorization": f"Bearer {token}"
+                }
+            )
+            
+            if response.status_code == 200:
+                user_data = response.json()
+                return {
+                    "id": user_data['id'],
+                    "email": user_data.get('email'),
+                    "role": "admin"
+                }
+        
+        raise HTTPException(status_code=401, detail="Invalid token")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Auth error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== MENU ENDPOINTS ====================
+
+@api_router.get("/menu/categories")
+async def get_categories():
+    """Get all menu categories"""
+    try:
+        response = await supabase_request(
+            "GET",
+            f"categories?tenant_id=eq.{TENANT_ID}&branch_id=eq.{BRANCH_ID}&is_active=eq.true&order=sort_order.asc",
+            use_service_key=True
+        )
+        
+        if response.status_code != 200:
+            return {"categories": []}
+        
+        return {"categories": response.json()}
+    except Exception as e:
+        logger.error(f"Get categories error: {e}")
+        return {"categories": []}
+
+@api_router.get("/menu/items")
+async def get_items(category_id: Optional[str] = None):
+    """Get menu items, optionally filtered by category"""
+    try:
+        endpoint = f"items?tenant_id=eq.{TENANT_ID}&branch_id=eq.{BRANCH_ID}&is_active=eq.true&order=sort_order.asc"
+        if category_id:
+            endpoint += f"&category_id=eq.{category_id}"
+        
+        response = await supabase_request("GET", endpoint, use_service_key=True)
+        
+        if response.status_code != 200:
+            return {"items": []}
+        
+        return {"items": response.json()}
+    except Exception as e:
+        logger.error(f"Get items error: {e}")
+        return {"items": []}
+
+@api_router.get("/menu/item/{item_id}")
+async def get_item_details(item_id: str):
+    """Get item with variants and modifiers"""
+    try:
+        # Get item
+        item_response = await supabase_request(
+            "GET",
+            f"items?id=eq.{item_id}&tenant_id=eq.{TENANT_ID}",
+            use_service_key=True
+        )
+        
+        if item_response.status_code != 200 or not item_response.json():
+            raise HTTPException(status_code=404, detail="Item not found")
+        
+        item = item_response.json()[0]
+        
+        # Get variants
+        variants_response = await supabase_request(
+            "GET",
+            f"item_variants?item_id=eq.{item_id}&is_active=eq.true&order=sort_order.asc",
+            use_service_key=True
+        )
+        item['variants'] = variants_response.json() if variants_response.status_code == 200 else []
+        
+        # Get modifier groups
+        modifiers_response = await supabase_request(
+            "GET",
+            f"modifier_groups?tenant_id=eq.{TENANT_ID}&is_active=eq.true",
+            use_service_key=True
+        )
+        
+        if modifiers_response.status_code == 200:
+            modifier_groups = modifiers_response.json()
+            # Filter by item's modifier_group_ids if present
+            if item.get('modifier_group_ids'):
+                modifier_groups = [mg for mg in modifier_groups if mg['id'] in item['modifier_group_ids']]
+            
+            # Get modifiers for each group
+            for group in modifier_groups:
+                mods_response = await supabase_request(
+                    "GET",
+                    f"modifiers?modifier_group_id=eq.{group['id']}&is_active=eq.true&order=sort_order.asc",
+                    use_service_key=True
+                )
+                group['modifiers'] = mods_response.json() if mods_response.status_code == 200 else []
+            
+            item['modifier_groups'] = modifier_groups
+        else:
+            item['modifier_groups'] = []
+        
+        return item
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get item details error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== ORDER ENDPOINTS ====================
+
+@api_router.post("/orders/create")
+async def create_order(request: OrderCreateRequest, authorization: str = Header(None)):
+    """Create a new order"""
+    try:
+        # Check idempotency
+        if request.idempotency_key:
+            existing = await supabase_request(
+                "GET",
+                f"orders?idempotency_key=eq.{request.idempotency_key}&tenant_id=eq.{TENANT_ID}",
+                use_service_key=True
+            )
+            if existing.status_code == 200 and existing.json():
+                return {"order": existing.json()[0], "already_exists": True}
+        
+        order_number = generate_order_number()
+        order_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        
+        # Create order
+        order_data = {
+            "id": order_id,
+            "tenant_id": TENANT_ID,
+            "branch_id": BRANCH_ID,
+            "order_number": order_number,
+            "order_type": request.order_type,
+            "status": "pending",
+            "subtotal": request.subtotal,
+            "tax": request.tax,
+            "service_charge": request.service_charge,
+            "delivery_fee": request.delivery_fee,
+            "total": request.total,
+            "payment_method": request.payment_method,
+            "cash_received": request.cash_received,
+            "change_due": request.change_due,
+            "customer_name": request.customer_name,
+            "customer_phone": request.customer_phone,
+            "customer_address": request.customer_address,
+            "notes": request.notes,
+            "idempotency_key": request.idempotency_key,
+            "created_at": now,
+            "updated_at": now
+        }
+        
+        order_response = await supabase_request("POST", "orders", order_data, use_service_key=True)
+        
+        if order_response.status_code not in [200, 201]:
+            logger.error(f"Order creation failed: {order_response.text}")
+            raise HTTPException(status_code=500, detail="Failed to create order")
+        
+        # Create order items
+        for idx, item in enumerate(request.items):
+            order_item_id = str(uuid.uuid4())
+            order_item_data = {
+                "id": order_item_id,
+                "order_id": order_id,
+                "item_id": item.get('item_id'),
+                "item_name": item.get('name'),
+                "item_name_ar": item.get('name_ar'),
+                "variant_id": item.get('variant_id'),
+                "variant_name": item.get('variant_name'),
+                "quantity": item.get('quantity', 1),
+                "unit_price": item.get('unit_price', 0),
+                "total_price": item.get('total_price', 0),
+                "modifiers": json.dumps(item.get('modifiers', [])),
+                "notes": item.get('notes'),
+                "created_at": now
+            }
+            await supabase_request("POST", "order_items", order_item_data, use_service_key=True)
+            
+            # Create KDS item
+            kds_item_data = {
+                "id": str(uuid.uuid4()),
+                "order_id": order_id,
+                "order_item_id": order_item_id,
+                "item_name": item.get('name'),
+                "item_name_ar": item.get('name_ar'),
+                "quantity": item.get('quantity', 1),
+                "modifiers": json.dumps(item.get('modifiers', [])),
+                "notes": item.get('notes'),
+                "station": item.get('station', 'main'),
+                "status": "pending",
+                "created_at": now
+            }
+            await supabase_request("POST", "kds_items", kds_item_data, use_service_key=True)
+        
+        # Create initial order state
+        state_data = {
+            "id": str(uuid.uuid4()),
+            "order_id": order_id,
+            "status": "pending",
+            "created_at": now
+        }
+        await supabase_request("POST", "order_states", state_data, use_service_key=True)
+        
+        return {
+            "success": True,
+            "order": {
+                "id": order_id,
+                "order_number": order_number,
+                "status": "pending",
+                "total": request.total
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Create order error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.patch("/orders/update-status")
+async def update_order_status(request: OrderStatusUpdateRequest, authorization: str = Header(None)):
+    """Update order status"""
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        
+        # Update order
+        update_data = {
+            "status": request.status,
+            "updated_at": now
+        }
+        
+        response = await supabase_request(
+            "PATCH",
+            f"orders?id=eq.{request.order_id}&tenant_id=eq.{TENANT_ID}",
+            update_data,
+            use_service_key=True
+        )
+        
+        if response.status_code not in [200, 204]:
+            raise HTTPException(status_code=500, detail="Failed to update order")
+        
+        # Add state record
+        state_data = {
+            "id": str(uuid.uuid4()),
+            "order_id": request.order_id,
+            "status": request.status,
+            "created_at": now
+        }
+        await supabase_request("POST", "order_states", state_data, use_service_key=True)
+        
+        return {"success": True, "status": request.status}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update status error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/orders")
+async def get_orders(status: Optional[str] = None, limit: int = 50):
+    """Get orders"""
+    try:
+        endpoint = f"orders?tenant_id=eq.{TENANT_ID}&branch_id=eq.{BRANCH_ID}&order=created_at.desc&limit={limit}"
+        if status:
+            endpoint += f"&status=eq.{status}"
+        
+        response = await supabase_request("GET", endpoint, use_service_key=True)
+        
+        if response.status_code != 200:
+            return {"orders": []}
+        
+        return {"orders": response.json()}
+    except Exception as e:
+        logger.error(f"Get orders error: {e}")
+        return {"orders": []}
+
+@api_router.get("/orders/{order_id}")
+async def get_order(order_id: str):
+    """Get single order with items"""
+    try:
+        # Get order
+        order_response = await supabase_request(
+            "GET",
+            f"orders?id=eq.{order_id}&tenant_id=eq.{TENANT_ID}",
+            use_service_key=True
+        )
+        
+        if order_response.status_code != 200 or not order_response.json():
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        order = order_response.json()[0]
+        
+        # Get items
+        items_response = await supabase_request(
+            "GET",
+            f"order_items?order_id=eq.{order_id}",
+            use_service_key=True
+        )
+        order['items'] = items_response.json() if items_response.status_code == 200 else []
+        
+        # Get states
+        states_response = await supabase_request(
+            "GET",
+            f"order_states?order_id=eq.{order_id}&order=created_at.asc",
+            use_service_key=True
+        )
+        order['states'] = states_response.json() if states_response.status_code == 200 else []
+        
+        return order
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get order error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== KDS ENDPOINTS ====================
+
+@api_router.get("/kds/items")
+async def get_kds_items(station: Optional[str] = None):
+    """Get KDS items"""
+    try:
+        endpoint = f"kds_items?status=neq.completed&order=created_at.asc"
+        if station:
+            endpoint += f"&station=eq.{station}"
+        
+        response = await supabase_request("GET", endpoint, use_service_key=True)
+        
+        if response.status_code != 200:
+            return {"items": []}
+        
+        items = response.json()
+        
+        # Get order info for each item
+        for item in items:
+            order_response = await supabase_request(
+                "GET",
+                f"orders?id=eq.{item['order_id']}&select=order_number,order_type,status",
+                use_service_key=True
+            )
+            if order_response.status_code == 200 and order_response.json():
+                item['order'] = order_response.json()[0]
+        
+        return {"items": items}
+    except Exception as e:
+        logger.error(f"Get KDS items error: {e}")
+        return {"items": []}
+
+@api_router.post("/kds/bump")
+async def bump_kds_item(request: KDSBumpRequest):
+    """Bump (complete) a KDS item"""
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        
+        response = await supabase_request(
+            "PATCH",
+            f"kds_items?id=eq.{request.kds_item_id}",
+            {"status": "completed", "completed_at": now},
+            use_service_key=True
+        )
+        
+        if response.status_code not in [200, 204]:
+            raise HTTPException(status_code=500, detail="Failed to bump item")
+        
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Bump KDS item error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== ADMIN ENDPOINTS ====================
+
+@api_router.get("/admin/dashboard")
+async def get_dashboard_stats():
+    """Get dashboard statistics"""
+    try:
+        today = datetime.now(timezone.utc).date().isoformat()
+        
+        # Today's orders
+        orders_response = await supabase_request(
+            "GET",
+            f"orders?tenant_id=eq.{TENANT_ID}&branch_id=eq.{BRANCH_ID}&created_at=gte.{today}T00:00:00",
+            use_service_key=True
+        )
+        
+        orders = orders_response.json() if orders_response.status_code == 200 else []
+        
+        total_sales = sum(o.get('total', 0) for o in orders)
+        pending_count = len([o for o in orders if o.get('status') == 'pending'])
+        
+        return {
+            "today_orders": len(orders),
+            "today_sales": total_sales,
+            "pending_count": pending_count,
+            "currency": "KWD"
+        }
+    except Exception as e:
+        logger.error(f"Dashboard error: {e}")
+        return {"today_orders": 0, "today_sales": 0, "pending_count": 0, "currency": "KWD"}
+
+@api_router.get("/admin/categories")
+async def admin_get_categories():
+    """Get all categories for admin"""
+    try:
+        response = await supabase_request(
+            "GET",
+            f"categories?tenant_id=eq.{TENANT_ID}&branch_id=eq.{BRANCH_ID}&order=sort_order.asc",
+            use_service_key=True
+        )
+        return {"categories": response.json() if response.status_code == 200 else []}
+    except Exception as e:
+        logger.error(f"Admin categories error: {e}")
+        return {"categories": []}
+
+@api_router.post("/admin/categories")
+async def admin_create_category(category: Dict[str, Any]):
+    """Create a category"""
+    try:
+        category['id'] = str(uuid.uuid4())
+        category['tenant_id'] = TENANT_ID
+        category['branch_id'] = BRANCH_ID
+        category['created_at'] = datetime.now(timezone.utc).isoformat()
+        
+        response = await supabase_request("POST", "categories", category, use_service_key=True)
+        
+        if response.status_code not in [200, 201]:
+            raise HTTPException(status_code=500, detail="Failed to create category")
+        
+        return {"success": True, "category": response.json()[0] if response.json() else category}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Create category error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.patch("/admin/categories/{category_id}")
+async def admin_update_category(category_id: str, category: Dict[str, Any]):
+    """Update a category"""
+    try:
+        category['updated_at'] = datetime.now(timezone.utc).isoformat()
+        
+        response = await supabase_request(
+            "PATCH",
+            f"categories?id=eq.{category_id}&tenant_id=eq.{TENANT_ID}",
+            category,
+            use_service_key=True
+        )
+        
+        if response.status_code not in [200, 204]:
+            raise HTTPException(status_code=500, detail="Failed to update category")
+        
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update category error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/admin/categories/{category_id}")
+async def admin_delete_category(category_id: str):
+    """Delete a category"""
+    try:
+        response = await supabase_request(
+            "DELETE",
+            f"categories?id=eq.{category_id}&tenant_id=eq.{TENANT_ID}",
+            use_service_key=True
+        )
+        
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Delete category error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/admin/items")
+async def admin_get_items():
+    """Get all items for admin"""
+    try:
+        response = await supabase_request(
+            "GET",
+            f"items?tenant_id=eq.{TENANT_ID}&branch_id=eq.{BRANCH_ID}&order=sort_order.asc",
+            use_service_key=True
+        )
+        return {"items": response.json() if response.status_code == 200 else []}
+    except Exception as e:
+        logger.error(f"Admin items error: {e}")
+        return {"items": []}
+
+@api_router.post("/admin/items")
+async def admin_create_item(item: Dict[str, Any]):
+    """Create an item"""
+    try:
+        item['id'] = str(uuid.uuid4())
+        item['tenant_id'] = TENANT_ID
+        item['branch_id'] = BRANCH_ID
+        item['created_at'] = datetime.now(timezone.utc).isoformat()
+        
+        response = await supabase_request("POST", "items", item, use_service_key=True)
+        
+        if response.status_code not in [200, 201]:
+            raise HTTPException(status_code=500, detail="Failed to create item")
+        
+        return {"success": True, "item": response.json()[0] if response.json() else item}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Create item error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.patch("/admin/items/{item_id}")
+async def admin_update_item(item_id: str, item: Dict[str, Any]):
+    """Update an item"""
+    try:
+        item['updated_at'] = datetime.now(timezone.utc).isoformat()
+        
+        response = await supabase_request(
+            "PATCH",
+            f"items?id=eq.{item_id}&tenant_id=eq.{TENANT_ID}",
+            item,
+            use_service_key=True
+        )
+        
+        if response.status_code not in [200, 204]:
+            raise HTTPException(status_code=500, detail="Failed to update item")
+        
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update item error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/admin/items/{item_id}")
+async def admin_delete_item(item_id: str):
+    """Delete an item"""
+    try:
+        response = await supabase_request(
+            "DELETE",
+            f"items?id=eq.{item_id}&tenant_id=eq.{TENANT_ID}",
+            use_service_key=True
+        )
+        
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Delete item error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== DELIVERY ZONES ====================
+
+@api_router.get("/admin/delivery-zones")
+async def get_delivery_zones():
+    """Get delivery zones"""
+    try:
+        response = await supabase_request(
+            "GET",
+            f"delivery_zones?tenant_id=eq.{TENANT_ID}&branch_id=eq.{BRANCH_ID}&order=zone_name.asc",
+            use_service_key=True
+        )
+        return {"zones": response.json() if response.status_code == 200 else []}
+    except Exception as e:
+        logger.error(f"Get zones error: {e}")
+        return {"zones": []}
+
+@api_router.post("/admin/delivery-zones")
+async def create_delivery_zone(zone: Dict[str, Any]):
+    """Create a delivery zone"""
+    try:
+        zone['id'] = str(uuid.uuid4())
+        zone['tenant_id'] = TENANT_ID
+        zone['branch_id'] = BRANCH_ID
+        zone['created_at'] = datetime.now(timezone.utc).isoformat()
+        
+        response = await supabase_request("POST", "delivery_zones", zone, use_service_key=True)
+        
+        if response.status_code not in [200, 201]:
+            raise HTTPException(status_code=500, detail="Failed to create zone")
+        
+        return {"success": True, "zone": response.json()[0] if response.json() else zone}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Create zone error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.patch("/admin/delivery-zones/{zone_id}")
+async def update_delivery_zone(zone_id: str, zone: Dict[str, Any]):
+    """Update a delivery zone"""
+    try:
+        zone['updated_at'] = datetime.now(timezone.utc).isoformat()
+        
+        response = await supabase_request(
+            "PATCH",
+            f"delivery_zones?id=eq.{zone_id}&tenant_id=eq.{TENANT_ID}",
+            zone,
+            use_service_key=True
+        )
+        
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Update zone error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/admin/delivery-zones/{zone_id}")
+async def delete_delivery_zone(zone_id: str):
+    """Delete a delivery zone"""
+    try:
+        response = await supabase_request(
+            "DELETE",
+            f"delivery_zones?id=eq.{zone_id}&tenant_id=eq.{TENANT_ID}",
+            use_service_key=True
+        )
+        
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Delete zone error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== COUPONS ====================
+
+@api_router.get("/admin/coupons")
+async def get_coupons():
+    """Get all coupons"""
+    try:
+        response = await supabase_request(
+            "GET",
+            f"coupons?tenant_id=eq.{TENANT_ID}&order=created_at.desc",
+            use_service_key=True
+        )
+        return {"coupons": response.json() if response.status_code == 200 else []}
+    except Exception as e:
+        logger.error(f"Get coupons error: {e}")
+        return {"coupons": []}
+
+@api_router.post("/admin/coupons")
+async def create_coupon(coupon: Dict[str, Any]):
+    """Create a coupon"""
+    try:
+        coupon['id'] = str(uuid.uuid4())
+        coupon['tenant_id'] = TENANT_ID
+        coupon['created_at'] = datetime.now(timezone.utc).isoformat()
+        
+        response = await supabase_request("POST", "coupons", coupon, use_service_key=True)
+        
+        if response.status_code not in [200, 201]:
+            raise HTTPException(status_code=500, detail="Failed to create coupon")
+        
+        return {"success": True, "coupon": response.json()[0] if response.json() else coupon}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Create coupon error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/admin/coupons/{coupon_id}")
+async def delete_coupon(coupon_id: str):
+    """Delete a coupon"""
+    try:
+        await supabase_request(
+            "DELETE",
+            f"coupons?id=eq.{coupon_id}&tenant_id=eq.{TENANT_ID}",
+            use_service_key=True
+        )
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Delete coupon error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== LOYALTY ====================
+
+@api_router.get("/admin/loyalty-settings")
+async def get_loyalty_settings():
+    """Get loyalty settings"""
+    try:
+        response = await supabase_request(
+            "GET",
+            f"loyalty_settings?tenant_id=eq.{TENANT_ID}",
+            use_service_key=True
+        )
+        settings = response.json() if response.status_code == 200 else []
+        return {"settings": settings[0] if settings else None}
+    except Exception as e:
+        logger.error(f"Get loyalty settings error: {e}")
+        return {"settings": None}
+
+@api_router.post("/admin/loyalty-settings")
+async def save_loyalty_settings(settings: Dict[str, Any]):
+    """Save loyalty settings"""
+    try:
+        settings['tenant_id'] = TENANT_ID
+        settings['updated_at'] = datetime.now(timezone.utc).isoformat()
+        
+        # Check if exists
+        existing = await supabase_request(
+            "GET",
+            f"loyalty_settings?tenant_id=eq.{TENANT_ID}",
+            use_service_key=True
+        )
+        
+        if existing.status_code == 200 and existing.json():
+            # Update
+            response = await supabase_request(
+                "PATCH",
+                f"loyalty_settings?tenant_id=eq.{TENANT_ID}",
+                settings,
+                use_service_key=True
+            )
+        else:
+            # Insert
+            settings['id'] = str(uuid.uuid4())
+            settings['created_at'] = datetime.now(timezone.utc).isoformat()
+            response = await supabase_request("POST", "loyalty_settings", settings, use_service_key=True)
+        
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Save loyalty settings error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/admin/loyalty-rules")
+async def get_loyalty_rules():
+    """Get loyalty rules"""
+    try:
+        response = await supabase_request(
+            "GET",
+            f"loyalty_rules?tenant_id=eq.{TENANT_ID}&order=created_at.asc",
+            use_service_key=True
+        )
+        return {"rules": response.json() if response.status_code == 200 else []}
+    except Exception as e:
+        logger.error(f"Get loyalty rules error: {e}")
+        return {"rules": []}
+
+@api_router.post("/admin/loyalty-rules")
+async def create_loyalty_rule(rule: Dict[str, Any]):
+    """Create a loyalty rule"""
+    try:
+        rule['id'] = str(uuid.uuid4())
+        rule['tenant_id'] = TENANT_ID
+        rule['created_at'] = datetime.now(timezone.utc).isoformat()
+        
+        response = await supabase_request("POST", "loyalty_rules", rule, use_service_key=True)
+        
+        return {"success": True, "rule": response.json()[0] if response.json() else rule}
+    except Exception as e:
+        logger.error(f"Create loyalty rule error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== SYSTEM SETTINGS ====================
+
+@api_router.get("/admin/settings")
+async def get_system_settings():
+    """Get system settings"""
+    try:
+        response = await supabase_request(
+            "GET",
+            f"system_settings?tenant_id=eq.{TENANT_ID}&branch_id=eq.{BRANCH_ID}",
+            use_service_key=True
+        )
+        settings = response.json() if response.status_code == 200 else []
+        return {"settings": settings[0] if settings else None}
+    except Exception as e:
+        logger.error(f"Get settings error: {e}")
+        return {"settings": None}
+
+@api_router.post("/admin/settings")
+async def save_system_settings(settings: Dict[str, Any]):
+    """Save system settings"""
+    try:
+        settings['tenant_id'] = TENANT_ID
+        settings['branch_id'] = BRANCH_ID
+        settings['updated_at'] = datetime.now(timezone.utc).isoformat()
+        
+        existing = await supabase_request(
+            "GET",
+            f"system_settings?tenant_id=eq.{TENANT_ID}&branch_id=eq.{BRANCH_ID}",
+            use_service_key=True
+        )
+        
+        if existing.status_code == 200 and existing.json():
+            response = await supabase_request(
+                "PATCH",
+                f"system_settings?tenant_id=eq.{TENANT_ID}&branch_id=eq.{BRANCH_ID}",
+                settings,
+                use_service_key=True
+            )
+        else:
+            settings['id'] = str(uuid.uuid4())
+            settings['created_at'] = datetime.now(timezone.utc).isoformat()
+            response = await supabase_request("POST", "system_settings", settings, use_service_key=True)
+        
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Save settings error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/admin/api-keys")
+async def save_api_key(request: ApiKeyRequest):
+    """Save API key (encrypted) for payment providers"""
+    try:
+        # In production, encrypt the key before storing
+        key_data = {
+            "id": str(uuid.uuid4()),
+            "tenant_id": TENANT_ID,
+            "provider": request.provider,
+            "api_key": request.api_key,  # Should be encrypted in production
+            "api_secret": request.api_secret,
+            "is_test": request.is_test,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        # Delete existing for this provider
+        await supabase_request(
+            "DELETE",
+            f"payment_providers?tenant_id=eq.{TENANT_ID}&provider=eq.{request.provider}",
+            use_service_key=True
+        )
+        
+        # Insert new
+        response = await supabase_request("POST", "payment_providers", key_data, use_service_key=True)
+        
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Save API key error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/admin/api-keys/test")
+async def test_api_key(request: ApiKeyRequest):
+    """Test API key format (validation only, no actual calls)"""
+    try:
+        # Basic format validation
+        if not request.api_key or len(request.api_key) < 10:
+            return {"success": False, "message": "API key too short"}
+        
+        # Provider-specific format checks
+        validations = {
+            "myfatoorah": lambda k: k.startswith("rLtt") or k.startswith("Bearer"),
+            "upay": lambda k: len(k) >= 20,
+            "armada": lambda k: len(k) >= 10,
+            "wiyak": lambda k: len(k) >= 10,
+        }
+        
+        validator = validations.get(request.provider.lower(), lambda k: True)
+        is_valid = validator(request.api_key)
+        
+        return {
+            "success": is_valid,
+            "message": "API key format valid" if is_valid else "Invalid API key format"
+        }
+    except Exception as e:
+        logger.error(f"Test API key error: {e}")
+        return {"success": False, "message": str(e)}
+
+# ==================== PRINTER ENDPOINTS ====================
+
+@api_router.get("/admin/printers")
+async def get_printers():
+    """Get printer configurations"""
+    try:
+        response = await supabase_request(
+            "GET",
+            f"printers?tenant_id=eq.{TENANT_ID}&branch_id=eq.{BRANCH_ID}",
+            use_service_key=True
+        )
+        return {"printers": response.json() if response.status_code == 200 else []}
+    except Exception as e:
+        logger.error(f"Get printers error: {e}")
+        return {"printers": []}
+
+@api_router.post("/admin/printers")
+async def save_printer(printer: Dict[str, Any]):
+    """Save printer configuration"""
+    try:
+        printer['tenant_id'] = TENANT_ID
+        printer['branch_id'] = BRANCH_ID
+        printer['updated_at'] = datetime.now(timezone.utc).isoformat()
+        
+        if printer.get('id'):
+            response = await supabase_request(
+                "PATCH",
+                f"printers?id=eq.{printer['id']}&tenant_id=eq.{TENANT_ID}",
+                printer,
+                use_service_key=True
+            )
+        else:
+            printer['id'] = str(uuid.uuid4())
+            printer['created_at'] = datetime.now(timezone.utc).isoformat()
+            response = await supabase_request("POST", "printers", printer, use_service_key=True)
+        
+        return {"success": True, "printer": printer}
+    except Exception as e:
+        logger.error(f"Save printer error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/admin/printers/{printer_id}")
+async def delete_printer(printer_id: str):
+    """Delete a printer"""
+    try:
+        await supabase_request(
+            "DELETE",
+            f"printers?id=eq.{printer_id}&tenant_id=eq.{TENANT_ID}",
+            use_service_key=True
+        )
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Delete printer error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== REPORTS ====================
+
+@api_router.get("/admin/reports/orders")
+async def get_orders_report(start_date: Optional[str] = None, end_date: Optional[str] = None):
+    """Get orders report"""
+    try:
+        endpoint = f"orders?tenant_id=eq.{TENANT_ID}&branch_id=eq.{BRANCH_ID}&order=created_at.desc"
+        if start_date:
+            endpoint += f"&created_at=gte.{start_date}T00:00:00"
+        if end_date:
+            endpoint += f"&created_at=lte.{end_date}T23:59:59"
+        
+        response = await supabase_request("GET", endpoint, use_service_key=True)
+        orders = response.json() if response.status_code == 200 else []
+        
+        # Calculate summary
+        total_sales = sum(o.get('total', 0) for o in orders)
+        total_orders = len(orders)
+        avg_order = total_sales / total_orders if total_orders > 0 else 0
+        
+        return {
+            "orders": orders,
+            "summary": {
+                "total_orders": total_orders,
+                "total_sales": total_sales,
+                "average_order": avg_order
+            }
+        }
+    except Exception as e:
+        logger.error(f"Orders report error: {e}")
+        return {"orders": [], "summary": {}}
+
+@api_router.get("/admin/audit-logs")
+async def get_audit_logs(limit: int = 100):
+    """Get audit logs"""
+    try:
+        response = await supabase_request(
+            "GET",
+            f"audit_logs?tenant_id=eq.{TENANT_ID}&order=created_at.desc&limit={limit}",
+            use_service_key=True
+        )
+        return {"logs": response.json() if response.status_code == 200 else []}
+    except Exception as e:
+        logger.error(f"Audit logs error: {e}")
+        return {"logs": []}
+
+# ==================== RECEIPT PDF ====================
+
+@api_router.get("/receipt/{order_id}")
+async def get_receipt_data(order_id: str):
+    """Get receipt data for an order"""
+    try:
+        # Get order with items
+        order = await get_order(order_id)
+        
+        # Add branch info
+        order['branch_name'] = "Al-Katem & Al-Bukhari Palace"
+        order['branch_name_ar'] = "قصر الكاظم والبخاري"
+        order['generated_by'] = "RIWA POS"
+        
+        return order
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Receipt error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== HEALTH CHECK ====================
+
+@api_router.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
+
+@api_router.get("/")
+async def root():
+    return {"message": "RIWA POS API", "version": "1.0.0"}
+
+# Include the router in the main app
+app.include_router(api_router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
