@@ -334,6 +334,8 @@ async def get_items(category_id: Optional[str] = None):
             item['name'] = item.get('name_en', item.get('name', ''))
             item['name_ar'] = item.get('name_ar', '')
             item['is_active'] = item.get('status') == 'active'
+            # Map base_price to price for frontend compatibility
+            item['price'] = item.get('base_price', item.get('price', 0))
         
         return {"items": items}
     except Exception as e:
@@ -357,6 +359,7 @@ async def get_item_details(item_id: str):
         item = item_response.json()[0]
         item['name'] = item.get('name_en', item.get('name', ''))
         item['name_ar'] = item.get('name_ar', '')
+        item['price'] = item.get('base_price', item.get('price', 0))
         
         # Get variants
         variants_response = await supabase_request(
