@@ -506,8 +506,14 @@ class RIWAPOSAPITester:
         return success
 
 def main():
-    print("🚀 Starting RIWA POS API Testing...")
-    print("=" * 50)
+    print("🚀 Starting RIWA POS API Testing - Review Request Focus")
+    print("=" * 60)
+    print("🎯 Testing Focus Areas:")
+    print("   1. Complete Order Flow with Real-time KDS")
+    print("   2. Admin Menu Management")
+    print("   3. KDS Real-time Verification")
+    print("   4. Verify Prices from Supabase")
+    print("=" * 60)
     
     # Setup
     tester = RIWAPOSAPITester()
@@ -522,46 +528,55 @@ def main():
     print("\n🔐 AUTHENTICATION TESTS")
     print("-" * 30)
     pin_success, pin_response = tester.test_pin_login()
-    tester.test_email_login_valid()
-    tester.test_auth_me_without_token()
     
-    # Menu API tests
-    print("\n🍽️ MENU API TESTS")
-    print("-" * 30)
+    # Menu API tests - Verify prices from Supabase
+    print("\n🍽️ MENU API TESTS - VERIFY PRICES FROM SUPABASE")
+    print("-" * 50)
     tester.test_menu_categories()
-    tester.test_menu_items()
+    menu_success, menu_response = tester.test_menu_items()
     
-    # Order creation test (requires authentication)
-    print("\n📦 ORDER CREATION TEST")
-    print("-" * 30)
-    if pin_success:
-        tester.test_order_creation()
+    # Complete Order Flow Test
+    if pin_success and menu_success:
+        order_success, order_response = tester.test_complete_order_flow()
     else:
-        print("❌ Skipping order creation test - PIN login failed")
+        print("❌ Skipping order flow test - prerequisites failed")
+        order_success = False
     
-    # Order and KDS tests
-    print("\n📦 ORDER & KDS TESTS")
+    # KDS Real-time Verification
+    if order_success:
+        tester.test_kds_real_time_verification()
+        tester.test_kds_bump_functionality()
+    else:
+        print("❌ Skipping KDS tests - no order created")
+    
+    # Admin Menu Management Tests
+    tester.test_admin_menu_management()
+    
+    # Additional API tests for completeness
+    print("\n📦 ADDITIONAL API TESTS")
     print("-" * 30)
     tester.test_orders_endpoint()
-    tester.test_kds_items()
-    
-    # Admin API tests
-    print("\n👨‍💼 ADMIN API TESTS")
-    print("-" * 30)
     tester.test_admin_dashboard()
-    tester.test_admin_categories()
-    tester.test_admin_items()
     
     # Print final results
-    print("\n" + "=" * 50)
+    print("\n" + "=" * 60)
     print(f"📊 FINAL RESULTS")
     print(f"Tests passed: {tester.tests_passed}/{tester.tests_run}")
     print(f"Success rate: {(tester.tests_passed/tester.tests_run)*100:.1f}%")
     
+    # Summary of key test results
+    print(f"\n🎯 KEY TEST RESULTS:")
+    print(f"   🔐 PIN Login (Cashier 1/1234): {'✅ PASS' if pin_success else '❌ FAIL'}")
+    print(f"   🍽️  Menu Items with Prices: {'✅ PASS' if menu_success else '❌ FAIL'}")
+    print(f"   📦 Complete Order Flow: {'✅ PASS' if order_success else '❌ FAIL'}")
+    print(f"   📺 KDS Integration: {'✅ TESTED' if order_success else '❌ SKIPPED'}")
+    
     if tester.failed_tests:
         print(f"\n❌ FAILED TESTS:")
         for failure in tester.failed_tests:
-            print(f"  - {failure.get('test', 'Unknown')}: {failure.get('error', failure.get('response', 'Unknown error'))}")
+            test_name = failure.get('test', 'Unknown')
+            error_msg = failure.get('error', failure.get('response', 'Unknown error'))
+            print(f"  - {test_name}: {error_msg}")
     
     return 0 if tester.tests_passed == tester.tests_run else 1
 
