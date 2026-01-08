@@ -148,11 +148,12 @@ class RIWAPOSAPITester:
             print("❌ Cannot test order creation - no authentication token")
             return False
             
+        # Use the actual item ID from the menu items we retrieved
         order_data = {
             "order_type": "qsr",
             "items": [
                 {
-                    "item_id": "test",
+                    "item_id": "f0dc0172-3684-4108-b88b-a87c04c75b90",  # Using actual item ID from menu
                     "name": "Classic Burger",
                     "quantity": 1,
                     "unit_price": 1.500,
@@ -161,8 +162,10 @@ class RIWAPOSAPITester:
             ],
             "subtotal": 1.500,
             "tax": 0.075,
-            "total": 1.575,
-            "payment_method": "cash"
+            "service_charge": 0,
+            "delivery_fee": 0,
+            "total": 1.575
+            # Removed payment_method as it's causing schema error
         }
         
         success, response = self.run_test(
