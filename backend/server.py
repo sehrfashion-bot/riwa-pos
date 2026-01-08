@@ -429,7 +429,7 @@ async def create_order(request: OrderCreateRequest, authorization: str = Header(
             "channel": "pos",
             "status": "pending",
             "payment_status": "paid" if request.payment_method else "pending",
-            "payment_method": request.payment_method,
+            # "payment_method": request.payment_method,  # Column doesn't exist in schema
             "subtotal": request.subtotal,
             "tax_amount": request.tax,
             "service_charge": request.service_charge,
