@@ -44,6 +44,7 @@ const POSKDS = () => {
   // Load KDS items from API
   const loadKDSItems = useCallback(async () => {
     try {
+      console.log('Loading KDS items, token:', token ? 'present' : 'missing');
       const endpoint = station === 'all' 
         ? `${apiUrl}/kds/items`
         : `${apiUrl}/kds/items?station=${station}`;
@@ -52,12 +53,17 @@ const POSKDS = () => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
-      if (!response.ok) throw new Error('Failed to load KDS items');
+      if (!response.ok) {
+        console.error('KDS API error:', response.status);
+        throw new Error('Failed to load KDS items');
+      }
       
       const data = await response.json();
+      console.log('KDS items loaded:', data.items?.length || 0, 'items');
       setKdsItems(data.items || []);
     } catch (error) {
       console.error('Failed to load KDS items:', error);
+      setKdsItems([]);
     } finally {
       setLoading(false);
     }
