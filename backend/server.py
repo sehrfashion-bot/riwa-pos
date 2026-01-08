@@ -26,7 +26,7 @@ JWT_SECRET = os.environ.get('SUPABASE_LEGACY_JWT_SECRET', '')
 
 # Correct tenant/branch from user specification
 TENANT_ID = 'af8d6568-fb4d-43ce-a97d-8cebca6a44d9'
-BRANCH_ID = 'af8d6568-fb4d-43ce-a97d-8cebca6a44d9'
+BRANCH_ID = 'd73bf34c-5c8c-47c8-9518-b85c7447ebde'
 
 # Create the main app
 app = FastAPI(title="RIWA POS API")
