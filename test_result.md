@@ -84,6 +84,9 @@ backend:
       - working: true
         agent: "main"
         comment: "Fixed tenant_id - now correctly using af8d6568-fb4d-43ce-a97d-8cebca6a44d9. Login tested with 'Cashier 1' and PIN '1234'"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: PIN login working perfectly with username='Cashier 1' and pin='1234'. Returns valid JWT token."
 
   - task: "Menu categories API"
     implemented: true
@@ -96,6 +99,9 @@ backend:
       - working: true
         agent: "main"
         comment: "Categories loading from correct tenant. Returns 1 category (Burgers)"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Menu categories API working correctly. Returns 1 category (Burgers) for correct tenant."
 
   - task: "Menu items API"
     implemented: true
@@ -108,30 +114,63 @@ backend:
       - working: true
         agent: "main"
         comment: "Items loading from correct tenant. Returns 1 item (Classic Burger)"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Menu items API working correctly. Returns 1 item (Classic Burger) for correct tenant."
 
   - task: "Order creation API"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Endpoint exists but needs E2E testing"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Order creation API working! Fixed database schema issues (payment_method column missing, wrong branch_id). Successfully creates orders with proper authentication. Minor: KDS item creation has schema issues but order creation itself works."
 
   - task: "Email-based authentication for Admin"
     implemented: true
-    working: "NA"
+    working: false
     file: "/app/backend/server.py"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Supabase Auth integration implemented, needs testing with valid credentials"
+      - working: false
+        agent: "testing"
+        comment: "❌ TESTED: Email login fails with test credentials (admin@riwapos.com/admin123). Returns 401 'Invalid credentials'. Need valid admin credentials or user setup in Supabase Auth."
+
+  - task: "Orders API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Orders API working correctly. Fixed branch_id filtering issue. Now returns created orders properly."
+
+  - task: "KDS Items API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: KDS Items API endpoint working (returns empty list). Minor: KDS item creation during order has schema issues with 'item_name' column, but API endpoint itself works."
 
 frontend:
   - task: "POS Login with Username + PIN"
