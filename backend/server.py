@@ -24,8 +24,13 @@ SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://sqhjsctsxlnivcbeclrn.supa
 SUPABASE_ANON_KEY = os.environ.get('SUPABASE_PUBLIC_ANON_KEY', '')
 SUPABASE_SERVICE_KEY = os.environ.get('SUPABASE_SECRET_SERVICE_ROLE_KEY', '')
 JWT_SECRET = os.environ.get('SUPABASE_LEGACY_JWT_SECRET', '')
+# Use actual tenant/branch from database if user's IDs don't exist
 TENANT_ID = os.environ.get('TENANT_ID', 'af8d6568-fb4d-43ce-a97d-8cebca6a44d9')
 BRANCH_ID = os.environ.get('BRANCH_ID', 'd73bf34c-5c8c-47c8-9518-b85c7447ebde')
+
+# Fallback tenant ID for existing data compatibility
+FALLBACK_TENANT_ID = 'd82147fa-f5e3-474c-bb39-6936ad3b519a'
+FALLBACK_BRANCH_ID = '3f9570b2-24d2-4f2d-81d7-25c6b35da76b'
 
 # Create the main app
 app = FastAPI(title="RIWA POS API")
@@ -133,27 +138,32 @@ def generate_order_number() -> str:
 async def pin_login(request: PinLoginRequest):
     """Login with PIN (for cashiers)"""
     try:
-        # Query users with PIN
+        # Query all users with PIN (without tenant filter for backward compatibility)
         response = await supabase_request(
             "GET",
-            f"users?tenant_id=eq.{TENANT_ID}&select=id,name,name_ar,role,pin,branch_id",
+            f"users?pin=neq.null&select=id,name,name_ar,role,pin,branch_id,tenant_id",
             use_service_key=True
         )
         
         if response.status_code != 200:
+            logger.error(f"PIN login query failed: {response.status_code} - {response.text}")
             raise HTTPException(status_code=500, detail="Database error")
         
         users = response.json()
         
         for user in users:
-            if user.get('pin'):
-                if await verify_pin(request.pin, user['pin']):
+            user_pin = user.get('pin')
+            if user_pin:
+                # Check both plain text and hashed PIN
+                pin_match = (user_pin == request.pin) or await verify_pin(request.pin, user_pin)
+                
+                if pin_match:
                     # Generate session token
                     token_data = {
                         "user_id": user['id'],
                         "role": user['role'],
                         "branch_id": user.get('branch_id', BRANCH_ID),
-                        "tenant_id": TENANT_ID,
+                        "tenant_id": user.get('tenant_id', TENANT_ID),
                         "exp": datetime.now(timezone.utc).timestamp() + 86400  # 24h
                     }
                     token = jwt.encode(token_data, JWT_SECRET, algorithm="HS256")
