@@ -423,7 +423,7 @@ async def create_order(request: OrderCreateRequest, authorization: str = Header(
         order_data = {
             "id": order_id,
             "tenant_id": TENANT_ID,
-            "branch_id": BRANCH_ID,
+            "branch_id": payload.get('branch_id', BRANCH_ID) if user_id else BRANCH_ID,  # Use user's branch_id
             "order_number": order_number,
             "order_type": request.order_type.lower(),
             "channel": "pos",
