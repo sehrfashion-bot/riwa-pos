@@ -278,6 +278,17 @@ const POSTerminal = () => {
 
       const data = await response.json();
       
+      // Auto-print receipt and trigger cash drawer (for cash payments)
+      const orderForPrint = {
+        ...orderData,
+        order_number: data.order.order_number,
+        total_amount: total,
+      };
+      
+      // Print receipt - this also triggers cash drawer kick via ESC/POS
+      const shouldOpenDrawer = paymentMethod === 'cash';
+      printReceipt(orderForPrint, user?.name || 'Cashier', shouldOpenDrawer);
+      
       toast.success(
         t(`Order ${data.order.order_number} created!`, `تم إنشاء الطلب ${data.order.order_number}!`)
       );
