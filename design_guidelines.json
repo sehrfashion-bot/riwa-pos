@@ -1,0 +1,128 @@
+{
+  "identity": {
+    "name": "RIWA POS",
+    "persona": "E1 - The Anti-AI Designer",
+    "tone": "Professional, High-Contrast, Tactile, Reliable",
+    "theme_preference": "dark"
+  },
+  "typography": {
+    "primary_font": "Manrope",
+    "secondary_font": "Cairo",
+    "mono_font": "JetBrains Mono",
+    "fonts_to_load": [
+      "https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap",
+      "https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap",
+      "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"
+    ],
+    "usage": {
+      "headings": "font-sans (Manrope for EN, Cairo for AR), font-bold, tracking-tight",
+      "body": "font-sans (Manrope for EN, Cairo for AR), text-base, leading-relaxed",
+      "numbers": "font-mono (JetBrains Mono) or font-sans with tabular-nums",
+      "rtl_strategy": "Use 'Cairo' for Arabic text. Ensure numbers remain in English format (Western Arabic numerals 0-9) even in RTL mode."
+    }
+  },
+  "colors": {
+    "palette": {
+      "background": "#09090b",
+      "foreground": "#fafafa",
+      "card": "#18181b",
+      "card_foreground": "#fafafa",
+      "popover": "#18181b",
+      "popover_foreground": "#fafafa",
+      "primary": "#f59e0b",
+      "primary_foreground": "#09090b",
+      "secondary": "#27272a",
+      "secondary_foreground": "#fafafa",
+      "muted": "#27272a",
+      "muted_foreground": "#a1a1aa",
+      "accent": "#f59e0b",
+      "accent_foreground": "#09090b",
+      "destructive": "#ef4444",
+      "destructive_foreground": "#fafafa",
+      "border": "#27272a",
+      "input": "#27272a",
+      "ring": "#f59e0b"
+    },
+    "semantic": {
+      "success": "#10b981",
+      "warning": "#f59e0b",
+      "error": "#ef4444",
+      "info": "#3b82f6",
+      "pos_sidebar": "#121212",
+      "pos_item_card": "#1e1e22",
+      "pos_active_item": "#f59e0b"
+    }
+  },
+  "layout": {
+    "spacing_system": "Generous padding (p-6, p-8) for containers. Dense spacing (gap-2, gap-4) for data grids.",
+    "grid_patterns": {
+      "pos_menu": "grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 (Bento-style tiles)",
+      "admin_dashboard": "grid-cols-1 md:grid-cols-4 gap-6 (Control Room)",
+      "landing_split": "grid-cols-1 md:grid-cols-2 h-screen"
+    },
+    "container_styles": {
+      "card": "bg-card border border-border rounded-xl shadow-sm",
+      "glass_panel": "bg-black/60 backdrop-blur-xl border border-white/10",
+      "pos_button": "h-14 text-lg font-bold rounded-lg active:scale-95 transition-transform"
+    }
+  },
+  "components": {
+    "buttons": {
+      "default": "rounded-lg font-medium transition-all active:scale-95",
+      "primary": "bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_15px_rgba(245,158,11,0.3)]",
+      "outline": "border-2 border-border hover:bg-accent hover:text-accent-foreground",
+      "ghost": "hover:bg-accent/50 hover:text-accent-foreground"
+    },
+    "inputs": {
+      "default": "h-12 bg-input border-transparent focus:border-primary focus:ring-1 focus:ring-primary rounded-lg text-lg"
+    },
+    "cards": {
+      "default": "bg-card border border-border/50 rounded-xl p-6",
+      "interactive": "hover:border-primary/50 transition-colors cursor-pointer"
+    }
+  },
+  "visual_enhancers": {
+    "shadows": "shadow-lg for floating elements, shadow-[0_0_20px_rgba(0,0,0,0.5)] for modals",
+    "borders": "1px solid border-white/10 (subtle)",
+    "glassmorphism": "Use for sticky headers and overlays: bg-black/80 backdrop-blur-md border-b border-white/5",
+    "textures": "Subtle noise overlay on the main background to reduce banding in dark mode."
+  },
+  "motion": {
+    "hover": "transition-all duration-200 ease-out",
+    "click": "active:scale-95 duration-100",
+    "page_transition": "opacity-0 to opacity-100 duration-300",
+    "list_stagger": "stagger children by 0.05s"
+  },
+  "accessibility": {
+    "contrast": "Ensure text is #fafafa or #e5e5e5 on dark backgrounds. Avoid dark gray text.",
+    "focus_states": "Visible ring-2 ring-primary ring-offset-2 ring-offset-background",
+    "touch_targets": "Minimum 44px for all interactive elements in POS mode."
+  },
+  "media": {
+    "image_urls": {
+      "landing_pos": "https://images.unsplash.com/photo-1602665742701-389671bc40c0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzd8MHwxfHNlYXJjaHwzfHxyZXN0YXVyYW50JTIwbWFuYWdlciUyMGRhc2hib2FyZCUyMHRhYmxldHxlbnwwfHx8fDE3Njc4Nzg2NzJ8MA&ixlib=rb-4.1.0&q=85",
+      "landing_admin": "https://images.unsplash.com/photo-1658282514119-65e9920d1e29?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzd8MHwxfHNlYXJjaHwyfHxyZXN0YXVyYW50JTIwbWFuYWdlciUyMGRhc2hib2FyZCUyMHRhYmxldHxlbnwwfHx8fDE3Njc4Nzg2NzJ8MA&ixlib=rb-4.1.0&q=85",
+      "food_rice_chicken": "https://images.unsplash.com/photo-1639459742500-95502c67af6f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzh8MHwxfHNlYXJjaHwxfHxkZWxpY2lvdXMlMjBtaWRkbGUlMjBlYXN0ZXJuJTIwcmljZSUyMGRpc2glMjBjaGlja2VufGVufDB8fHx8MTc2Nzg3ODY3M3ww&ixlib=rb-4.1.0&q=85",
+      "food_generic_1": "https://images.unsplash.com/photo-1646809156467-6e825869b29f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzh8MHwxfHNlYXJjaHwyfHxkZWxpY2lvdXMlMjBtaWRkbGUlMjBlYXN0ZXJuJTIwcmljZSUyMGRpc2glMjBjaGlja2VufGVufDB8fHx8MTc2Nzg3ODY3M3ww&ixlib=rb-4.1.0&q=85"
+    },
+    "icons": "Use 'lucide-react' for standard UI icons. Use 'phosphor-react' (Duotone) for larger feature icons if needed."
+  },
+  "instructions_to_main_agent": [
+    "1. SETUP: Install 'lucide-react', 'clsx', 'tailwind-merge' if not present.",
+    "2. THEME: Apply the dark theme colors to 'index.css' immediately. The app should default to dark mode.",
+    "3. FONTS: Add the Google Fonts links to 'public/index.html' or import in CSS.",
+    "4. RTL: Implement a 'LanguageToggle' that switches the 'dir' attribute on the HTML tag between 'ltr' and 'rtl'.",
+    "5. LAYOUT: Build the Landing Page first with the split layout (POS vs Admin).",
+    "6. POS: Create the '/pos' route. Focus on the 'Terminal' layout: Sidebar (Cart) on Right (LTR) or Left (RTL), Grid (Menu) on the other side.",
+    "7. ADMIN: Create the '/admin' route with a sidebar navigation layout.",
+    "8. COMPONENTS: Use Shadcn/UI logic but override styles to match the 'E1' dark/gold aesthetic. Do not use default Shadcn styles.",
+    "9. DATA-TESTID: Add 'data-testid' to all interactive elements (buttons, inputs, cards)."
+  ],
+  "universal_guidelines": [
+    "Avoid gradients for backgrounds; use solid dark colors with subtle borders.",
+    "Use 'sonner' for toasts.",
+    "Never use 'alert()' or native confirm dialogs. Use custom accessible modals.",
+    "Ensure all text has sufficient contrast (APCA/WCAG AA).",
+    "Make sure the POS interface is touch-friendly (large buttons, no tiny links)."
+  ]
+}
