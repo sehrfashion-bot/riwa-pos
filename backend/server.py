@@ -407,11 +407,13 @@ async def create_order(request: OrderCreateRequest, authorization: str = Header(
     try:
         # Get user from token
         user_id = None
+        user_branch_id = BRANCH_ID
         if authorization:
             try:
                 token = authorization.replace("Bearer ", "")
                 payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
                 user_id = payload.get('user_id')
+                user_branch_id = payload.get('branch_id', BRANCH_ID)
             except:
                 pass
         
@@ -423,7 +425,7 @@ async def create_order(request: OrderCreateRequest, authorization: str = Header(
         order_data = {
             "id": order_id,
             "tenant_id": TENANT_ID,
-            "branch_id": payload.get('branch_id', BRANCH_ID) if user_id else BRANCH_ID,  # Use user's branch_id
+            "branch_id": user_branch_id,  # Use user's branch_id
             "order_number": order_number,
             "order_type": request.order_type.lower(),
             "channel": "pos",
