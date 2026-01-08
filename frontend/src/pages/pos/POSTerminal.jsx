@@ -472,13 +472,13 @@ const POSTerminal = () => {
             <span>{user?.name || 'Cashier'}</span>
           </div>
           
-          {/* Mobile Cart Button */}
+          {/* Mobile Cart Button - visible on screens smaller than lg (1024px) */}
           <Sheet open={cartOpen} onOpenChange={setCartOpen}>
             <SheetTrigger asChild>
               <Button
                 variant="outline"
                 size="icon"
-                className="md:hidden relative"
+                className="lg:hidden relative"
                 data-testid="mobile-cart-button"
               >
                 <ShoppingCart className="w-5 h-5" />
