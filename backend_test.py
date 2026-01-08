@@ -255,18 +255,32 @@ def main():
     tester.test_health_check()
     tester.test_root_endpoint()
     
+    # Authentication tests (must be first to get token)
+    print("\n🔐 AUTHENTICATION TESTS")
+    print("-" * 30)
+    pin_success, pin_response = tester.test_pin_login()
+    tester.test_email_login_valid()
+    tester.test_auth_me_without_token()
+    
     # Menu API tests
     print("\n🍽️ MENU API TESTS")
     print("-" * 30)
     tester.test_menu_categories()
     tester.test_menu_items()
     
-    # Auth API tests
-    print("\n🔐 AUTHENTICATION TESTS")
+    # Order creation test (requires authentication)
+    print("\n📦 ORDER CREATION TEST")
     print("-" * 30)
-    tester.test_pin_login()
-    tester.test_email_login()
-    tester.test_auth_me_without_token()
+    if pin_success:
+        tester.test_order_creation()
+    else:
+        print("❌ Skipping order creation test - PIN login failed")
+    
+    # Order and KDS tests
+    print("\n📦 ORDER & KDS TESTS")
+    print("-" * 30)
+    tester.test_orders_endpoint()
+    tester.test_kds_items()
     
     # Admin API tests
     print("\n👨‍💼 ADMIN API TESTS")
@@ -274,12 +288,6 @@ def main():
     tester.test_admin_dashboard()
     tester.test_admin_categories()
     tester.test_admin_items()
-    
-    # Order and KDS tests
-    print("\n📦 ORDER & KDS TESTS")
-    print("-" * 30)
-    tester.test_orders_endpoint()
-    tester.test_kds_items()
     
     # Print final results
     print("\n" + "=" * 50)
