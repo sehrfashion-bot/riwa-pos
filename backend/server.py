@@ -307,38 +307,39 @@ async def get_current_user(authorization: str = Header(None)):
 async def get_categories():
     """Get all menu categories"""
     try:
-        # Try with specified tenant first, then fallback
-        response = await supabase_request(
+        # Get categories from both tenants and merge
+        response1 = await supabase_request(
             "GET",
             f"categories?tenant_id=eq.{TENANT_ID}&status=eq.active&order=sort_order.asc",
             use_service_key=True
         )
         
-        if response.status_code == 200 and response.json():
-            categories = response.json()
-            # Normalize field names
-            for cat in categories:
-                cat['name'] = cat.get('name_en', cat.get('name', ''))
-                cat['name_ar'] = cat.get('name_ar', cat.get('name', ''))
-                cat['is_active'] = cat.get('status') == 'active'
-            return {"categories": categories}
-        
-        # Fallback to existing tenant data
-        response = await supabase_request(
+        response2 = await supabase_request(
             "GET",
             f"categories?tenant_id=eq.{FALLBACK_TENANT_ID}&status=eq.active&order=sort_order.asc",
             use_service_key=True
         )
         
-        if response.status_code != 200:
-            return {"categories": []}
+        categories = []
         
-        categories = response.json()
-        # Normalize field names
-        for cat in categories:
-            cat['name'] = cat.get('name_en', cat.get('name', ''))
-            cat['name_ar'] = cat.get('name_ar', cat.get('name', ''))
-            cat['is_active'] = cat.get('status') == 'active'
+        if response1.status_code == 200:
+            cats1 = response1.json() or []
+            for cat in cats1:
+                cat['name'] = cat.get('name_en', cat.get('name', ''))
+                cat['name_ar'] = cat.get('name_ar', cat.get('name', ''))
+                cat['is_active'] = cat.get('status') == 'active'
+            categories.extend(cats1)
+        
+        # Also add fallback data if primary has little data
+        if len(categories) < 3 and response2.status_code == 200:
+            cats2 = response2.json() or []
+            existing_ids = {c['id'] for c in categories}
+            for cat in cats2:
+                if cat['id'] not in existing_ids:
+                    cat['name'] = cat.get('name_en', cat.get('name', ''))
+                    cat['name_ar'] = cat.get('name_ar', cat.get('name', ''))
+                    cat['is_active'] = cat.get('status') == 'active'
+                    categories.append(cat)
         
         return {"categories": categories}
     except Exception as e:
@@ -349,38 +350,37 @@ async def get_categories():
 async def get_items(category_id: Optional[str] = None):
     """Get menu items, optionally filtered by category"""
     try:
-        # Try with specified tenant first
-        endpoint = f"items?tenant_id=eq.{TENANT_ID}&status=eq.active&order=sort_order.asc"
+        # Get items from both tenants and merge
+        endpoint1 = f"items?tenant_id=eq.{TENANT_ID}&status=eq.active&order=sort_order.asc"
+        endpoint2 = f"items?tenant_id=eq.{FALLBACK_TENANT_ID}&status=eq.active&order=sort_order.asc"
+        
         if category_id:
-            endpoint += f"&category_id=eq.{category_id}"
+            endpoint1 += f"&category_id=eq.{category_id}"
+            endpoint2 += f"&category_id=eq.{category_id}"
         
-        response = await supabase_request("GET", endpoint, use_service_key=True)
+        response1 = await supabase_request("GET", endpoint1, use_service_key=True)
+        response2 = await supabase_request("GET", endpoint2, use_service_key=True)
         
-        if response.status_code == 200 and response.json():
-            items = response.json()
-            # Normalize field names
-            for item in items:
+        items = []
+        
+        if response1.status_code == 200:
+            items1 = response1.json() or []
+            for item in items1:
                 item['name'] = item.get('name_en', item.get('name', ''))
                 item['name_ar'] = item.get('name_ar', item.get('name', ''))
                 item['is_active'] = item.get('status') == 'active'
-            return {"items": items}
+            items.extend(items1)
         
-        # Fallback to existing tenant data
-        endpoint = f"items?tenant_id=eq.{FALLBACK_TENANT_ID}&status=eq.active&order=sort_order.asc"
-        if category_id:
-            endpoint += f"&category_id=eq.{category_id}"
-        
-        response = await supabase_request("GET", endpoint, use_service_key=True)
-        
-        if response.status_code != 200:
-            return {"items": []}
-        
-        items = response.json()
-        # Normalize field names
-        for item in items:
-            item['name'] = item.get('name_en', item.get('name', ''))
-            item['name_ar'] = item.get('name_ar', item.get('name', ''))
-            item['is_active'] = item.get('status') == 'active'
+        # Also add fallback data if primary has little data
+        if len(items) < 5 and response2.status_code == 200:
+            items2 = response2.json() or []
+            existing_ids = {i['id'] for i in items}
+            for item in items2:
+                if item['id'] not in existing_ids:
+                    item['name'] = item.get('name_en', item.get('name', ''))
+                    item['name_ar'] = item.get('name_ar', item.get('name', ''))
+                    item['is_active'] = item.get('status') == 'active'
+                    items.append(item)
         
         return {"items": items}
     except Exception as e:
