@@ -310,24 +310,37 @@ async def get_categories():
         # Try with specified tenant first, then fallback
         response = await supabase_request(
             "GET",
-            f"categories?tenant_id=eq.{TENANT_ID}&is_active=eq.true&order=sort_order.asc",
+            f"categories?tenant_id=eq.{TENANT_ID}&status=eq.active&order=sort_order.asc",
             use_service_key=True
         )
         
         if response.status_code == 200 and response.json():
-            return {"categories": response.json()}
+            categories = response.json()
+            # Normalize field names
+            for cat in categories:
+                cat['name'] = cat.get('name_en', cat.get('name', ''))
+                cat['name_ar'] = cat.get('name_ar', cat.get('name', ''))
+                cat['is_active'] = cat.get('status') == 'active'
+            return {"categories": categories}
         
         # Fallback to existing tenant data
         response = await supabase_request(
             "GET",
-            f"categories?tenant_id=eq.{FALLBACK_TENANT_ID}&is_active=eq.true&order=sort_order.asc",
+            f"categories?tenant_id=eq.{FALLBACK_TENANT_ID}&status=eq.active&order=sort_order.asc",
             use_service_key=True
         )
         
         if response.status_code != 200:
             return {"categories": []}
         
-        return {"categories": response.json()}
+        categories = response.json()
+        # Normalize field names
+        for cat in categories:
+            cat['name'] = cat.get('name_en', cat.get('name', ''))
+            cat['name_ar'] = cat.get('name_ar', cat.get('name', ''))
+            cat['is_active'] = cat.get('status') == 'active'
+        
+        return {"categories": categories}
     except Exception as e:
         logger.error(f"Get categories error: {e}")
         return {"categories": []}
@@ -337,17 +350,23 @@ async def get_items(category_id: Optional[str] = None):
     """Get menu items, optionally filtered by category"""
     try:
         # Try with specified tenant first
-        endpoint = f"items?tenant_id=eq.{TENANT_ID}&is_active=eq.true&order=sort_order.asc"
+        endpoint = f"items?tenant_id=eq.{TENANT_ID}&status=eq.active&order=sort_order.asc"
         if category_id:
             endpoint += f"&category_id=eq.{category_id}"
         
         response = await supabase_request("GET", endpoint, use_service_key=True)
         
         if response.status_code == 200 and response.json():
-            return {"items": response.json()}
+            items = response.json()
+            # Normalize field names
+            for item in items:
+                item['name'] = item.get('name_en', item.get('name', ''))
+                item['name_ar'] = item.get('name_ar', item.get('name', ''))
+                item['is_active'] = item.get('status') == 'active'
+            return {"items": items}
         
         # Fallback to existing tenant data
-        endpoint = f"items?tenant_id=eq.{FALLBACK_TENANT_ID}&is_active=eq.true&order=sort_order.asc"
+        endpoint = f"items?tenant_id=eq.{FALLBACK_TENANT_ID}&status=eq.active&order=sort_order.asc"
         if category_id:
             endpoint += f"&category_id=eq.{category_id}"
         
@@ -356,7 +375,14 @@ async def get_items(category_id: Optional[str] = None):
         if response.status_code != 200:
             return {"items": []}
         
-        return {"items": response.json()}
+        items = response.json()
+        # Normalize field names
+        for item in items:
+            item['name'] = item.get('name_en', item.get('name', ''))
+            item['name_ar'] = item.get('name_ar', item.get('name', ''))
+            item['is_active'] = item.get('status') == 'active'
+        
+        return {"items": items}
     except Exception as e:
         logger.error(f"Get items error: {e}")
         return {"items": []}
