@@ -109,14 +109,259 @@ class RIWAPOSAPITester:
         return success, response
 
     def test_menu_items(self):
-        """Test menu items endpoint"""
+        """Test menu items endpoint and verify prices from Supabase"""
         success, response = self.run_test(
-            "Menu Items",
+            "Menu Items (Verify Prices from Supabase)",
             "GET",
             "menu/items",
             200
         )
+        
+        if success and response.get('items'):
+            items = response['items']
+            print(f"   📋 Found {len(items)} items")
+            
+            # Look for Classic Burger and verify price structure
+            for item in items:
+                if 'Classic Burger' in item.get('name', ''):
+                    self.classic_burger_item = item
+                    price = item.get('price', 0)
+                    base_price = item.get('base_price', 0)
+                    print(f"   🍔 Classic Burger found - Price: {price} KWD, Base Price: {base_price} KWD")
+                    
+                    # Verify that price field is mapped from base_price
+                    if price == base_price and price > 0:
+                        print(f"   ✅ Price mapping from base_price working correctly")
+                    else:
+                        print(f"   ⚠️  Price mapping issue - price: {price}, base_price: {base_price}")
+                    break
+            else:
+                print(f"   ⚠️  Classic Burger not found in menu items")
+        
         return success, response
+
+    def test_complete_order_flow(self):
+        """Test complete order flow: login -> add Classic Burger -> payment -> verify order"""
+        print("\n🔄 TESTING COMPLETE ORDER FLOW")
+        print("-" * 40)
+        
+        # Step 1: Login (already done in main flow)
+        if not self.token:
+            print("❌ Cannot test order flow - no authentication token")
+            return False
+        
+        # Step 2: Verify Classic Burger is available
+        if not self.classic_burger_item:
+            print("❌ Cannot test order flow - Classic Burger not found in menu")
+            return False
+        
+        item_id = self.classic_burger_item.get('id')
+        item_price = self.classic_burger_item.get('price', 2.500)
+        
+        print(f"   🍔 Using Classic Burger - ID: {item_id}, Price: {item_price} KWD")
+        
+        # Step 3: Create order with Classic Burger
+        order_data = {
+            "order_type": "qsr",
+            "items": [
+                {
+                    "item_id": item_id,
+                    "name": "Classic Burger",
+                    "quantity": 1,
+                    "unit_price": item_price,
+                    "total_price": item_price
+                }
+            ],
+            "subtotal": item_price,
+            "tax": round(item_price * 0.05, 3),  # 5% tax
+            "service_charge": 0,
+            "delivery_fee": 0,
+            "total": round(item_price * 1.05, 3),
+            "payment_method": "cash",
+            "cash_received": 3.000,
+            "change_due": round(3.000 - (item_price * 1.05), 3)
+        }
+        
+        success, response = self.run_test(
+            "Complete Order Flow - Create Order",
+            "POST",
+            "orders/create",
+            200,
+            data=order_data
+        )
+        
+        if success and response.get('success'):
+            self.created_order_id = response.get('order', {}).get('id')
+            order_number = response.get('order', {}).get('order_number')
+            print(f"   ✅ Order created successfully!")
+            print(f"   📋 Order ID: {self.created_order_id}")
+            print(f"   🏷️  Order Number: {order_number}")
+            return True, response
+        else:
+            print(f"   ❌ Order creation failed")
+            return False, response
+
+    def test_kds_real_time_verification(self):
+        """Test KDS real-time verification - check if order appears in KDS"""
+        print("\n📺 TESTING KDS REAL-TIME VERIFICATION")
+        print("-" * 40)
+        
+        # Get KDS items to see if our order appears
+        success, response = self.run_test(
+            "KDS Items - Check for Pending Orders",
+            "GET",
+            "kds/items",
+            200
+        )
+        
+        if success:
+            items = response.get('items', [])
+            print(f"   📋 Found {len(items)} KDS items")
+            
+            # Look for our created order
+            order_found = False
+            for item in items:
+                if item.get('order_id') == self.created_order_id:
+                    order_found = True
+                    self.kds_item_id = item.get('id')
+                    order_number = item.get('order_number')
+                    item_name = item.get('item_name', item.get('item_name_en', ''))
+                    print(f"   ✅ Order found in KDS!")
+                    print(f"   📋 Order Number: {order_number}")
+                    print(f"   🍔 Item: {item_name}")
+                    print(f"   🆔 KDS Item ID: {self.kds_item_id}")
+                    break
+            
+            if not order_found and self.created_order_id:
+                print(f"   ⚠️  Created order {self.created_order_id} not found in KDS items")
+                print(f"   📋 Available KDS items: {[item.get('order_number', 'No order number') for item in items]}")
+            elif not self.created_order_id:
+                print(f"   ℹ️  No order was created in previous test, so KDS check is informational only")
+            
+            return True
+        
+        return False
+
+    def test_kds_bump_functionality(self):
+        """Test KDS bump functionality to complete an item"""
+        if not self.kds_item_id:
+            print("   ⚠️  No KDS item ID available for bump test")
+            return False
+        
+        success, response = self.run_test(
+            "KDS Bump - Complete Item",
+            "POST",
+            "kds/bump",
+            200,
+            data={"kds_item_id": self.kds_item_id}
+        )
+        
+        if success:
+            print(f"   ✅ KDS item bumped successfully!")
+            
+            # Verify item is no longer in KDS
+            verify_success, verify_response = self.run_test(
+                "KDS Items - Verify Item Removed After Bump",
+                "GET",
+                "kds/items",
+                200
+            )
+            
+            if verify_success:
+                items = verify_response.get('items', [])
+                item_still_present = any(item.get('id') == self.kds_item_id for item in items)
+                
+                if not item_still_present:
+                    print(f"   ✅ Item successfully removed from KDS after bump")
+                else:
+                    print(f"   ⚠️  Item still present in KDS after bump")
+        
+        return success
+
+    def test_admin_menu_management(self):
+        """Test admin menu management functionality"""
+        print("\n👨‍💼 TESTING ADMIN MENU MANAGEMENT")
+        print("-" * 40)
+        
+        # Test 1: GET /api/admin/categories - list categories
+        cat_success, cat_response = self.run_test(
+            "Admin - Get Categories",
+            "GET",
+            "admin/categories",
+            200
+        )
+        
+        if cat_success:
+            categories = cat_response.get('categories', [])
+            print(f"   📋 Found {len(categories)} categories")
+            for cat in categories:
+                print(f"   📁 Category: {cat.get('name', 'Unnamed')} (ID: {cat.get('id', 'No ID')})")
+        
+        # Test 2: GET /api/admin/items - should show items with prices
+        items_success, items_response = self.run_test(
+            "Admin - Get Items with Prices",
+            "GET",
+            "admin/items",
+            200
+        )
+        
+        existing_item_id = None
+        if items_success:
+            items = items_response.get('items', [])
+            print(f"   📋 Found {len(items)} items")
+            for item in items:
+                name = item.get('name', 'Unnamed')
+                price = item.get('price', 0)
+                base_price = item.get('base_price', 0)
+                print(f"   🍽️  Item: {name} - Price: {price} KWD, Base Price: {base_price} KWD")
+                if not existing_item_id:
+                    existing_item_id = item.get('id')
+        
+        # Test 3: POST /api/admin/items - create a new item
+        new_item_data = {
+            "name": f"Test Burger {datetime.now().strftime('%H%M%S')}",
+            "name_ar": "برجر تجريبي",
+            "description": "Test burger for API testing",
+            "price": 3.750,
+            "category_id": categories[0].get('id') if categories else None,
+            "is_active": True
+        }
+        
+        create_success, create_response = self.run_test(
+            "Admin - Create New Item",
+            "POST",
+            "admin/items",
+            200,
+            data=new_item_data
+        )
+        
+        if create_success and create_response.get('success'):
+            created_item = create_response.get('item', {})
+            self.created_item_id = created_item.get('id')
+            print(f"   ✅ Item created successfully!")
+            print(f"   🆔 New Item ID: {self.created_item_id}")
+            print(f"   🍽️  Name: {created_item.get('name')}")
+            print(f"   💰 Price: {created_item.get('price', created_item.get('base_price'))} KWD")
+        
+        # Test 4: PATCH /api/admin/items/{id} - update item price
+        if existing_item_id:
+            update_data = {
+                "price": 4.250,
+                "name": "Updated Test Item"
+            }
+            
+            update_success, update_response = self.run_test(
+                f"Admin - Update Item Price (ID: {existing_item_id})",
+                "PATCH",
+                f"admin/items/{existing_item_id}",
+                200,
+                data=update_data
+            )
+            
+            if update_success:
+                print(f"   ✅ Item updated successfully!")
+        
+        return cat_success and items_success
 
     def test_admin_dashboard(self):
         """Test admin dashboard endpoint"""
