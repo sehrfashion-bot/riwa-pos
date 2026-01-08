@@ -3,6 +3,7 @@
 import requests
 import sys
 import json
+import uuid
 from datetime import datetime
 
 class RIWAPOSAPITester:
@@ -10,9 +11,12 @@ class RIWAPOSAPITester:
         self.base_url = base_url
         self.token = None
         self.created_order_id = None
+        self.created_item_id = None
+        self.kds_item_id = None
         self.tests_run = 0
         self.tests_passed = 0
         self.failed_tests = []
+        self.classic_burger_item = None
 
     def run_test(self, name, method, endpoint, expected_status, data=None, headers=None):
         """Run a single API test"""
