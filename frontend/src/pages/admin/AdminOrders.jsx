@@ -386,7 +386,7 @@ const AdminOrders = () => {
                       <Button variant="outline" onClick={() => viewOrderDetails(order)}>
                         <Eye className="w-4 h-4" />
                       </Button>
-                      <Button variant="outline" onClick={() => printReceipt(order)}>
+                      <Button variant="outline" onClick={() => handlePrintReceipt(order)}>
                         <Printer className="w-4 h-4" />
                       </Button>
                     </div>
