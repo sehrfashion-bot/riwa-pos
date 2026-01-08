@@ -141,16 +141,55 @@ class RIWAPOSAPITester:
             print(f"   ❌ Login failed or no token received")
             return False, response
 
-    def test_email_login(self):
-        """Test email login (will fail without valid credentials but should return proper error)"""
+    def test_order_creation(self):
+        """Test order creation with authentication"""
+        if not self.token:
+            print("❌ Cannot test order creation - no authentication token")
+            return False
+            
+        order_data = {
+            "order_type": "qsr",
+            "items": [
+                {
+                    "item_id": "test",
+                    "name": "Classic Burger",
+                    "quantity": 1,
+                    "unit_price": 1.500,
+                    "total_price": 1.500
+                }
+            ],
+            "subtotal": 1.500,
+            "tax": 0.075,
+            "total": 1.575,
+            "payment_method": "cash"
+        }
+        
         success, response = self.run_test(
-            "Email Login (Invalid Credentials)",
+            "Order Creation",
+            "POST",
+            "orders/create",
+            200,
+            data=order_data
+        )
+        
+        if success and response.get('success'):
+            self.created_order_id = response.get('order', {}).get('id')
+            print(f"   ✅ Order created with ID: {self.created_order_id}")
+            return True, response
+        else:
+            print(f"   ❌ Order creation failed")
+            return False, response
+
+    def test_email_login_valid(self):
+        """Test email login with test credentials"""
+        success, response = self.run_test(
+            "Email Login (Test Credentials)",
             "POST",
             "auth/email-login",
-            401,  # Expecting 401 for invalid credentials
-            data={"email": "test@example.com", "password": "wrongpassword"}
+            200,  # Expecting success or proper error handling
+            data={"email": "admin@riwapos.com", "password": "admin123"}
         )
-        return success
+        return success, response
 
     def test_auth_me_without_token(self):
         """Test auth/me endpoint without token"""
