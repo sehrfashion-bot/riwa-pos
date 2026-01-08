@@ -87,6 +87,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ TESTED: PIN login working perfectly with username='Cashier 1' and pin='1234'. Returns valid JWT token."
+      - working: true
+        agent: "testing"
+        comment: "✅ RE-TESTED (Review Request): PIN login with Cashier 1/1234 working perfectly. User: Cashier 1, Role: cashier, Branch ID: d73bf34c-5c8c-47c8-9518-b85c7447ebde"
 
   - task: "Menu categories API"
     implemented: true
@@ -102,6 +105,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ TESTED: Menu categories API working correctly. Returns 1 category (Burgers) for correct tenant."
+      - working: true
+        agent: "testing"
+        comment: "✅ RE-TESTED (Review Request): Menu categories API working correctly. Returns 1 category (Burgers) for tenant af8d6568-fb4d-43ce-a97d-8cebca6a44d9"
 
   - task: "Menu items API"
     implemented: true
@@ -117,6 +123,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ TESTED: Menu items API working correctly. Returns 1 item (Classic Burger) for correct tenant."
+      - working: true
+        agent: "testing"
+        comment: "✅ RE-TESTED (Review Request): Menu items API working correctly. Returns 2 items with proper price mapping from base_price to price field. Verified prices from Supabase working correctly."
 
   - task: "Order creation API"
     implemented: true
@@ -132,6 +141,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ TESTED: Order creation API working! Fixed database schema issues (payment_method column missing, wrong branch_id). Successfully creates orders with proper authentication. Minor: KDS item creation has schema issues but order creation itself works."
+      - working: true
+        agent: "testing"
+        comment: "✅ RE-TESTED (Review Request): Complete order flow working perfectly! Created order ORD-20260108-1B6C with Test Burger (3.5 KWD). Order appears in KDS real-time and can be bumped successfully."
 
   - task: "Email-based authentication for Admin"
     implemented: true
@@ -159,6 +171,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ TESTED: Orders API working correctly. Fixed branch_id filtering issue. Now returns created orders properly."
+      - working: true
+        agent: "testing"
+        comment: "✅ RE-TESTED (Review Request): Orders API working correctly. Returns 7 orders, including newly created order from test flow."
 
   - task: "KDS Items API"
     implemented: true
@@ -171,6 +186,21 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ TESTED: KDS Items API endpoint working (returns empty list). Minor: KDS item creation during order has schema issues with 'item_name' column, but API endpoint itself works."
+      - working: true
+        agent: "testing"
+        comment: "✅ RE-TESTED (Review Request): KDS real-time verification working perfectly! Order appears in KDS immediately after creation. KDS bump functionality working - item removed from KDS after bump."
+
+  - task: "Admin Menu Management APIs"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED (Review Request): Admin menu management working! GET /api/admin/categories returns 1 category. GET /api/admin/items returns items with prices. POST /api/admin/items creates new items successfully. PATCH /api/admin/items/{id} updates item prices successfully."
 
 frontend:
   - task: "POS Login with Username + PIN"
