@@ -632,46 +632,59 @@ async def get_order(order_id: str):
 
 @api_router.get("/kds/items")
 async def get_kds_items(station: Optional[str] = None):
-    """Get KDS items"""
+    """Get KDS items from orders with pending/preparing status"""
     try:
-        endpoint = f"kds_items?status=neq.completed&order=created_at.asc"
-        if station and station != 'all':
-            endpoint += f"&station=eq.{station}"
+        # Get orders with pending or preparing status
+        orders_response = await supabase_request(
+            "GET",
+            f"orders?tenant_id=eq.{TENANT_ID}&status=in.(pending,accepted,preparing)&order=created_at.asc",
+            use_service_key=True
+        )
         
-        response = await supabase_request("GET", endpoint, use_service_key=True)
-        
-        if response.status_code != 200:
-            logger.error(f"KDS items query failed: {response.status_code} - {response.text}")
+        if orders_response.status_code != 200:
+            logger.error(f"KDS orders query failed: {orders_response.status_code}")
             return {"items": []}
         
-        items = response.json() or []
+        orders = orders_response.json() or []
+        kds_items = []
         
-        # Get order info for each item
-        for item in items:
-            if item.get('order_id'):
-                order_response = await supabase_request(
-                    "GET",
-                    f"orders?id=eq.{item['order_id']}&select=order_number,order_type,status",
-                    use_service_key=True
-                )
-                if order_response.status_code == 200 and order_response.json():
-                    item['order'] = order_response.json()[0]
+        # Get items for each order
+        for order in orders:
+            items_response = await supabase_request(
+                "GET",
+                f"order_items?order_id=eq.{order['id']}&status=neq.completed&order=created_at.asc",
+                use_service_key=True
+            )
+            
+            if items_response.status_code == 200:
+                items = items_response.json() or []
+                for item in items:
+                    item['order'] = {
+                        'order_number': order.get('order_number'),
+                        'order_type': order.get('order_type'),
+                        'status': order.get('status')
+                    }
+                    item['order_number'] = order.get('order_number')
+                    item['item_name'] = item.get('item_name_en', '')
+                    item['item_name_ar'] = item.get('item_name_ar', '')
+                    kds_items.append(item)
         
-        return {"items": items}
+        return {"items": kds_items}
     except Exception as e:
         logger.error(f"Get KDS items error: {e}")
         return {"items": []}
 
 @api_router.post("/kds/bump")
 async def bump_kds_item(request: KDSBumpRequest):
-    """Bump (complete) a KDS item"""
+    """Bump (complete) a KDS item - marks order_item as completed"""
     try:
         now = datetime.now(timezone.utc).isoformat()
         
+        # Update order_item status
         response = await supabase_request(
             "PATCH",
-            f"kds_items?id=eq.{request.kds_item_id}",
-            {"status": "completed", "completed_at": now},
+            f"order_items?id=eq.{request.kds_item_id}",
+            {"status": "completed"},
             use_service_key=True
         )
         
