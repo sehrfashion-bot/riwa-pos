@@ -616,9 +616,9 @@ const POSTerminal = () => {
         </div>
       </div>
 
-      {/* Mobile Cart Summary Bar */}
+      {/* Mobile Cart Summary Bar - visible on screens smaller than lg */}
       {cart.length > 0 && (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border/30 p-3 flex items-center justify-between z-50">
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border/30 p-3 flex items-center justify-between z-50">
           <div>
             <p className="text-sm text-muted-foreground">{cart.length} {t('items', 'أصناف')}</p>
             <p className="font-bold text-lg text-primary ltr-nums">{total.toFixed(3)} {t('KWD', 'د.ك')}</p>
