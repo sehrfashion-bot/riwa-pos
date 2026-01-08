@@ -197,12 +197,19 @@ class RIWAPOSAPITester:
 
     def test_auth_me_without_token(self):
         """Test auth/me endpoint without token"""
+        # Temporarily remove token for this test
+        temp_token = self.token
+        self.token = None
+        
         success, response = self.run_test(
             "Auth Me (No Token)",
             "GET",
             "auth/me",
             401  # Expecting 401 for no token
         )
+        
+        # Restore token
+        self.token = temp_token
         return success
 
     def test_admin_categories(self):
