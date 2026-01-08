@@ -24,9 +24,9 @@ SUPABASE_ANON_KEY = os.environ.get('SUPABASE_PUBLIC_ANON_KEY', '')
 SUPABASE_SERVICE_KEY = os.environ.get('SUPABASE_SECRET_SERVICE_ROLE_KEY', '')
 JWT_SECRET = os.environ.get('SUPABASE_LEGACY_JWT_SECRET', '')
 
-# Use the actual tenant/branch from the existing data
-TENANT_ID = 'd82147fa-f5e3-474c-bb39-6936ad3b519a'
-BRANCH_ID = '3f9570b2-24d2-4f2d-81d7-25c6b35da76b'
+# Correct tenant/branch from user specification
+TENANT_ID = 'af8d6568-fb4d-43ce-a97d-8cebca6a44d9'
+BRANCH_ID = 'af8d6568-fb4d-43ce-a97d-8cebca6a44d9'
 
 # Create the main app
 app = FastAPI(title="RIWA POS API")
