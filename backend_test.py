@@ -158,23 +158,24 @@ class RIWAPOSAPITester:
             print("❌ Cannot test order flow - no authentication token")
             return False
         
-        # Step 2: Verify Classic Burger is available
+        # Step 2: Verify an item is available
         if not self.classic_burger_item:
-            print("❌ Cannot test order flow - Classic Burger not found in menu")
+            print("❌ Cannot test order flow - No menu item found")
             return False
         
         item_id = self.classic_burger_item.get('id')
+        item_name = self.classic_burger_item.get('name', 'Unknown Item')
         item_price = self.classic_burger_item.get('price', 2.500)
         
-        print(f"   🍔 Using Classic Burger - ID: {item_id}, Price: {item_price} KWD")
+        print(f"   🍔 Using item: {item_name} - ID: {item_id}, Price: {item_price} KWD")
         
-        # Step 3: Create order with Classic Burger
+        # Step 3: Create order with the available item
         order_data = {
             "order_type": "qsr",
             "items": [
                 {
                     "item_id": item_id,
-                    "name": "Classic Burger",
+                    "name": item_name,
                     "quantity": 1,
                     "unit_price": item_price,
                     "total_price": item_price
@@ -186,8 +187,8 @@ class RIWAPOSAPITester:
             "delivery_fee": 0,
             "total": round(item_price * 1.05, 3),
             "payment_method": "cash",
-            "cash_received": 3.000,
-            "change_due": round(3.000 - (item_price * 1.05), 3)
+            "cash_received": 5.000,
+            "change_due": round(5.000 - (item_price * 1.05), 3)
         }
         
         success, response = self.run_test(
