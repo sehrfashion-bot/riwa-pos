@@ -13,7 +13,7 @@ const LandingPage = () => {
       {/* Header */}
       <header className="absolute top-0 left-0 right-0 z-10 p-4 flex justify-between items-center">
         <div className="text-muted-foreground text-sm">
-          {t('Al-Katem & Al-Bukhari Palace', 'قصر الكاظم والبخاري')}
+          {t('RIWA POS & WEB SERVICES', 'قخدمات نقاط البيع والويب من ريوا')}
         </div>
         <Button
           variant="ghost"
