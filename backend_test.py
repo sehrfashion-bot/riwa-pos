@@ -321,7 +321,6 @@ class RIWAPOSAPITester:
         new_item_data = {
             "name": f"Test Burger {datetime.now().strftime('%H%M%S')}",
             "name_ar": "برجر تجريبي",
-            "description": "Test burger for API testing",
             "price": 3.750,
             "category_id": categories[0].get('id') if categories else None,
             "is_active": True
