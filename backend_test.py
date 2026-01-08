@@ -374,18 +374,22 @@ class RIWAPOSAPITester:
         return success, response
 
     def test_pin_login(self):
-        """Test PIN login with valid credentials"""
+        """Test PIN login with valid credentials - Cashier 1, PIN 1234"""
         success, response = self.run_test(
-            "PIN Login (Valid Credentials)",
+            "PIN Login (Cashier 1, PIN 1234)",
             "POST",
             "auth/pin-login",
-            200,  # Expecting 200 for valid login
+            200,
             data={"username": "Cashier 1", "pin": "1234"}
         )
         
         if success and response.get('success') and response.get('token'):
             self.token = response['token']
-            print(f"   ✅ Login successful, token obtained")
+            user_info = response.get('user', {})
+            print(f"   ✅ Login successful!")
+            print(f"   👤 User: {user_info.get('name', 'Unknown')}")
+            print(f"   🏢 Role: {user_info.get('role', 'Unknown')}")
+            print(f"   🏪 Branch ID: {user_info.get('branch_id', 'Unknown')}")
             return True, response
         else:
             print(f"   ❌ Login failed or no token received")
