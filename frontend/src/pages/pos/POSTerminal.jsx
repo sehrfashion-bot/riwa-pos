@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { createClient } from '@supabase/supabase-js';
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Banknote,
-  User, LogOut, Settings, ChefHat, X, Check, Loader2, Menu as MenuIcon
+  User, LogOut, Settings, ChefHat, X, Check, Loader2, Menu as MenuIcon, Printer
 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../componen
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { Badge } from '../../components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../../components/ui/sheet';
+import { printReceipt } from '../../utils/receipt';
 
 // Supabase client for realtime
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://sqhjsctsxlnivcbeclrn.supabase.co';
