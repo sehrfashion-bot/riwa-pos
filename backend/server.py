@@ -456,54 +456,28 @@ async def create_order(request: OrderCreateRequest, authorization: str = Header(
             logger.error(f"Order creation failed: {order_response.status_code} - {order_response.text}")
             raise HTTPException(status_code=500, detail="Failed to create order")
         
-        # Create order items and KDS items
+        # Create order items (the order_items table is used for KDS via real-time)
         for idx, item in enumerate(request.items):
             order_item_id = str(uuid.uuid4())
             
-            # Create order item
+            # Create order item with correct column names for Supabase schema
             order_item_data = {
                 "id": order_item_id,
                 "order_id": order_id,
                 "item_id": item.get('item_id'),
                 "variant_id": item.get('variant_id'),
+                "item_name_en": item.get('name', ''),
+                "item_name_ar": item.get('name_ar', ''),
                 "quantity": item.get('quantity', 1),
                 "unit_price": item.get('unit_price', 0),
                 "total_price": item.get('total_price', 0),
-                "modifiers": item.get('modifiers', []),
                 "notes": item.get('notes'),
                 "status": "pending",
                 "created_at": now
             }
-            await supabase_request("POST", "order_items", order_item_data, use_service_key=True)
-            
-            # Create KDS item for real-time kitchen display
-            kds_item_data = {
-                "id": str(uuid.uuid4()),
-                "order_id": order_id,
-                "order_item_id": order_item_id,
-                "order_number": order_number,
-                "item_name": item.get('name', ''),
-                "item_name_ar": item.get('name_ar', ''),
-                "quantity": item.get('quantity', 1),
-                "modifiers": item.get('modifiers', []),
-                "notes": item.get('notes'),
-                "station": item.get('station', 'main'),
-                "status": "pending",
-                "created_at": now
-            }
-            kds_response = await supabase_request("POST", "kds_items", kds_item_data, use_service_key=True)
-            if kds_response.status_code not in [200, 201]:
-                logger.warning(f"KDS item creation warning: {kds_response.status_code} - {kds_response.text}")
-        
-        # Create order state record
-        state_data = {
-            "id": str(uuid.uuid4()),
-            "order_id": order_id,
-            "status": "pending",
-            "changed_by": user_id,
-            "created_at": now
-        }
-        await supabase_request("POST", "order_states", state_data, use_service_key=True)
+            item_response = await supabase_request("POST", "order_items", order_item_data, use_service_key=True)
+            if item_response.status_code not in [200, 201]:
+                logger.warning(f"Order item creation warning: {item_response.status_code} - {item_response.text}")
         
         return {
             "success": True,
