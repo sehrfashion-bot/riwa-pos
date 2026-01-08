@@ -1,17 +1,23 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp, useLanguage } from '../../App';
+import { createClient } from '@supabase/supabase-js';
 import AdminLayout from './AdminLayout';
 import { toast } from 'sonner';
 import {
   Clock, Check, ChefHat, Truck, Package, Volume2, VolumeX,
-  Printer, RefreshCw, Eye
+  Printer, RefreshCw, Eye, ShoppingBag
 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { ScrollArea } from '../../components/ui/scroll-area';
+
+// Supabase client for realtime
+const supabaseUrl = 'https://sqhjsctsxlnivcbeclrn.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNxaGpzY3RzeGxuaXZjYmVjbHJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1ODE5MjIsImV4cCI6MjA4MDE1NzkyMn0.X7Ad_4Uh4eA0zgNpZvYLh21oZbWIagbvPcNVrYS5WBo';
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const AdminOrders = () => {
   const navigate = useNavigate();
@@ -27,7 +33,7 @@ const AdminOrders = () => {
 
   const buzzerRef = useRef(null);
   const buzzerIntervalRef = useRef(null);
-  const pollIntervalRef = useRef(null);
+  const subscriptionRef = useRef(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -39,37 +45,85 @@ const AdminOrders = () => {
     buzzerRef.current = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleWVLldfn3oBSTkWF2/TkjVQ1EniN6f/0nF42F0Juk/TznGQ1FUZukuzlmF46JUxkheLfmWVKN1Bfdtz/+sp8TzMaQZLD4/XUj0snCB6f4///5KFKKgAAzur//+WcRiwAANnw///jpkUuAADk9f//4aRHLwAA8Pn//9+hSzIAAPn8///do0wzAAD+/v//3KRNNQAA////3KRNNQAA');
     
     loadOrders();
-    
-    // Poll every 7 seconds
-    pollIntervalRef.current = setInterval(loadOrders, 7000);
+
+    // Subscribe to orders table changes
+    const channel = supabase
+      .channel('admin-orders-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'orders'
+        },
+        (payload) => {
+          console.log('New order:', payload);
+          const newOrder = payload.new;
+          // Normalize fields
+          newOrder.subtotal = newOrder.subtotal || 0;
+          newOrder.tax = newOrder.tax_amount || 0;
+          newOrder.total = newOrder.total_amount || 0;
+          
+          setOrders(prev => [newOrder, ...prev]);
+          
+          if (buzzerEnabled && newOrder.status === 'pending') {
+            playBuzzer();
+            toast.info(t('New order received!', 'تم استلام طلب جديد!'));
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'orders'
+        },
+        (payload) => {
+          console.log('Order updated:', payload);
+          const updatedOrder = payload.new;
+          updatedOrder.subtotal = updatedOrder.subtotal || 0;
+          updatedOrder.tax = updatedOrder.tax_amount || 0;
+          updatedOrder.total = updatedOrder.total_amount || 0;
+          
+          setOrders(prev => 
+            prev.map(order => 
+              order.id === updatedOrder.id ? updatedOrder : order
+            )
+          );
+        }
+      )
+      .subscribe((status) => {
+        console.log('Orders subscription status:', status);
+      });
+
+    subscriptionRef.current = channel;
     
     return () => {
-      if (buzzerIntervalRef.current) clearInterval(buzzerIntervalRef.current);
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      stopBuzzer();
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, buzzerEnabled]);
 
   const loadOrders = useCallback(async () => {
     try {
       const response = await fetch(`${apiUrl}/orders?limit=100`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      
+      if (!response.ok) throw new Error('Failed to load orders');
+      
       const data = await response.json();
-      
-      const prevPendingCount = orders.filter(o => o.status === 'pending').length;
-      const newPendingCount = (data.orders || []).filter(o => o.status === 'pending').length;
-      
-      if (newPendingCount > prevPendingCount && buzzerEnabled) {
-        playBuzzer();
-      }
-      
       setOrders(data.orders || []);
     } catch (error) {
       console.error('Failed to load orders:', error);
+      toast.error(t('Failed to load orders', 'فشل تحميل الطلبات'));
     } finally {
       setLoading(false);
     }
-  }, [apiUrl, token, orders.length, buzzerEnabled]);
+  }, [apiUrl, token]);
 
   const playBuzzer = () => {
     setNewOrderAlert(true);
@@ -106,7 +160,11 @@ const AdminOrders = () => {
       
       toast.success(t(`Order ${status}`, `الطلب ${status}`));
       stopBuzzer();
-      loadOrders();
+      
+      // Update local state
+      setOrders(prev => prev.map(o => 
+        o.id === orderId ? { ...o, status } : o
+      ));
       
       if (selectedOrder?.id === orderId) {
         setSelectedOrder({ ...selectedOrder, status });
@@ -121,6 +179,9 @@ const AdminOrders = () => {
       const response = await fetch(`${apiUrl}/orders/${order.id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      
+      if (!response.ok) throw new Error('Failed to load order');
+      
       const data = await response.json();
       setSelectedOrder(data);
       setDetailsOpen(true);
@@ -148,7 +209,6 @@ const AdminOrders = () => {
               table { width: 100%; border-collapse: collapse; }
               th, td { text-align: left; padding: 4px 0; }
               th { border-bottom: 1px dashed #000; }
-              .total-row { border-top: 1px dashed #000; font-weight: bold; }
               .grand-total { font-size: 14px; border-top: 2px solid #000; margin-top: 5px; padding-top: 5px; }
               .footer { text-align: center; margin-top: 20px; font-size: 10px; }
             </style>
@@ -160,23 +220,21 @@ const AdminOrders = () => {
               <p>${new Date(order.created_at).toLocaleString()}</p>
               <p>Bill No: ${order.order_number}</p>
               <p>Type: ${order.order_type}</p>
-              <p>Payment: ${order.payment_method}</p>
+              <p>Payment: ${order.payment_method || 'N/A'}</p>
             </div>
             <table>
               <thead>
                 <tr>
                   <th>Item</th>
                   <th style="text-align:center">Qty</th>
-                  <th style="text-align:right">Price</th>
                   <th style="text-align:right">Total</th>
                 </tr>
               </thead>
               <tbody>
                 ${items.map(item => `
                   <tr>
-                    <td>${item.item_name}<br/><small>${item.item_name_ar || ''}</small></td>
+                    <td>${item.item_name || 'Item'}</td>
                     <td style="text-align:center">${item.quantity}</td>
-                    <td style="text-align:right">${(item.unit_price || 0).toFixed(3)}</td>
                     <td style="text-align:right">${(item.total_price || 0).toFixed(3)}</td>
                   </tr>
                 `).join('')}
@@ -184,12 +242,10 @@ const AdminOrders = () => {
             </table>
             <div class="info">
               <div class="info-row"><span>Subtotal:</span><span>${(order.subtotal || 0).toFixed(3)}</span></div>
-              <div class="info-row"><span>Tax (5%):</span><span>${(order.tax || 0).toFixed(3)}</span></div>
-              ${order.service_charge > 0 ? `<div class="info-row"><span>Service:</span><span>${order.service_charge.toFixed(3)}</span></div>` : ''}
-              ${order.delivery_fee > 0 ? `<div class="info-row"><span>Delivery:</span><span>${order.delivery_fee.toFixed(3)}</span></div>` : ''}
+              <div class="info-row"><span>Tax:</span><span>${(order.tax || order.tax_amount || 0).toFixed(3)}</span></div>
               <div class="info-row grand-total">
-                <span>Grand Total / المجموع الإجمالي:</span>
-                <span>KWD ${(order.total || 0).toFixed(3)}</span>
+                <span>Total / المجموع:</span>
+                <span>KWD ${(order.total || order.total_amount || 0).toFixed(3)}</span>
               </div>
             </div>
             <div class="footer">
@@ -263,7 +319,7 @@ const AdminOrders = () => {
     <AdminLayout title={t('Orders', 'الطلبات')}>
       <div className="space-y-6">
         {/* Controls */}
-        <div className={`flex items-center justify-between ${newOrderAlert ? 'animate-blink' : ''}`}>
+        <div className={`flex flex-wrap items-center justify-between gap-4 ${newOrderAlert ? 'animate-blink' : ''}`}>
           <div className="flex items-center gap-4">
             <Button
               variant={buzzerEnabled ? 'default' : 'outline'}
@@ -313,8 +369,13 @@ const AdminOrders = () => {
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="text-xl font-bold text-primary ltr-nums">
-                      {order.total?.toFixed(3)} KWD
+                      {(order.total || order.total_amount || 0).toFixed(3)} KWD
                     </div>
+                    {order.customer_name && (
+                      <p className="text-sm text-muted-foreground">
+                        {order.customer_name} {order.customer_phone && `• ${order.customer_phone}`}
+                      </p>
+                    )}
                     <div className="flex gap-2">
                       <Button
                         className="flex-1 bg-green-600 hover:bg-green-700"
@@ -359,7 +420,7 @@ const AdminOrders = () => {
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="text-xl font-bold text-primary ltr-nums">
-                      {order.total?.toFixed(3)} KWD
+                      {(order.total || order.total_amount || 0).toFixed(3)} KWD
                     </div>
                     <div className="flex gap-2">
                       {getNextStatus(order.status) && (
@@ -368,8 +429,8 @@ const AdminOrders = () => {
                           onClick={() => updateOrderStatus(order.id, getNextStatus(order.status))}
                         >
                           {getStatusIcon(getNextStatus(order.status))}
-                          <span className="ml-2">
-                            {t(getNextStatus(order.status), getNextStatus(order.status))}
+                          <span className="ml-2 capitalize">
+                            {getNextStatus(order.status)?.replace(/_/g, ' ')}
                           </span>
                         </Button>
                       )}
@@ -402,7 +463,7 @@ const AdminOrders = () => {
                       <div>
                         <p className="font-medium">#{order.order_number}</p>
                         <p className="text-sm text-muted-foreground ltr-nums">
-                          {order.total?.toFixed(3)} KWD
+                          {(order.total || order.total_amount || 0).toFixed(3)} KWD
                         </p>
                       </div>
                       <div className="flex gap-1">
@@ -433,13 +494,14 @@ const AdminOrders = () => {
           <div className="text-center py-12 text-muted-foreground">
             <ShoppingBag className="w-16 h-16 mx-auto mb-4 opacity-50" />
             <p className="text-xl">{t('No orders yet', 'لا توجد طلبات بعد')}</p>
+            <p className="text-sm mt-2">{t('Orders will appear here in real-time', 'ستظهر الطلبات هنا مباشرة')}</p>
           </div>
         )}
       </div>
 
       {/* Order Details Dialog */}
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <DialogContent className="max-w-lg bg-card border-border">
+        <DialogContent className="max-w-lg bg-card border-border max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>
               {t('Order', 'الطلب')} #{selectedOrder?.order_number}
@@ -447,8 +509,8 @@ const AdminOrders = () => {
           </DialogHeader>
           
           {selectedOrder && (
-            <ScrollArea className="max-h-[60vh]">
-              <div className="space-y-4">
+            <ScrollArea className="flex-1">
+              <div className="space-y-4 pr-4">
                 {/* Order Info */}
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
@@ -457,11 +519,11 @@ const AdminOrders = () => {
                   </div>
                   <div>
                     <p className="text-muted-foreground">{t('Type', 'النوع')}</p>
-                    <p>{selectedOrder.order_type}</p>
+                    <p className="capitalize">{selectedOrder.order_type}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">{t('Payment', 'الدفع')}</p>
-                    <p>{selectedOrder.payment_method}</p>
+                    <p className="capitalize">{selectedOrder.payment_method || 'N/A'}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">{t('Date', 'التاريخ')}</p>
@@ -475,7 +537,7 @@ const AdminOrders = () => {
                     <h4 className="font-medium mb-2">{t('Customer', 'العميل')}</h4>
                     {selectedOrder.customer_name && <p>{selectedOrder.customer_name}</p>}
                     {selectedOrder.customer_phone && <p className="ltr-nums">{selectedOrder.customer_phone}</p>}
-                    {selectedOrder.customer_address && <p>{selectedOrder.customer_address}</p>}
+                    {selectedOrder.delivery_address && <p>{selectedOrder.delivery_address}</p>}
                   </div>
                 )}
 
@@ -487,11 +549,8 @@ const AdminOrders = () => {
                       <div key={idx} className="flex justify-between items-start bg-secondary/30 p-3 rounded-lg">
                         <div>
                           <p className="font-medium">
-                            {language === 'ar' ? item.item_name_ar || item.item_name : item.item_name}
+                            {language === 'ar' ? item.item_name_ar || item.item_name : item.item_name || 'Item'}
                           </p>
-                          {item.variant_name && (
-                            <p className="text-sm text-muted-foreground">{item.variant_name}</p>
-                          )}
                           {item.notes && (
                             <p className="text-sm text-yellow-400">📝 {item.notes}</p>
                           )}
@@ -499,7 +558,7 @@ const AdminOrders = () => {
                         <div className="text-right">
                           <p className="font-bold ltr-nums">x{item.quantity}</p>
                           <p className="text-sm text-muted-foreground ltr-nums">
-                            {item.total_price?.toFixed(3)}
+                            {(item.total_price || 0).toFixed(3)}
                           </p>
                         </div>
                       </div>
@@ -511,11 +570,11 @@ const AdminOrders = () => {
                 <div className="border-t border-border/30 pt-4 space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">{t('Subtotal', 'المجموع الفرعي')}</span>
-                    <span className="ltr-nums">{selectedOrder.subtotal?.toFixed(3)}</span>
+                    <span className="ltr-nums">{(selectedOrder.subtotal || 0).toFixed(3)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">{t('Tax', 'الضريبة')}</span>
-                    <span className="ltr-nums">{selectedOrder.tax?.toFixed(3)}</span>
+                    <span className="ltr-nums">{(selectedOrder.tax || selectedOrder.tax_amount || 0).toFixed(3)}</span>
                   </div>
                   {selectedOrder.service_charge > 0 && (
                     <div className="flex justify-between">
@@ -531,7 +590,7 @@ const AdminOrders = () => {
                   )}
                   <div className="flex justify-between text-lg font-bold pt-2 border-t border-border/30">
                     <span>{t('Total', 'الإجمالي')}</span>
-                    <span className="text-primary ltr-nums">{selectedOrder.total?.toFixed(3)} KWD</span>
+                    <span className="text-primary ltr-nums">{(selectedOrder.total || selectedOrder.total_amount || 0).toFixed(3)} KWD</span>
                   </div>
                 </div>
 
