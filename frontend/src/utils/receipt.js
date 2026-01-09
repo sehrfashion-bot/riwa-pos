@@ -312,7 +312,8 @@ export const generateReceiptHTML = (order, cashierName = 'Cashier', billNumber =
     <div class="thank-you">Thank you for choosing</div>
     <div class="thank-you">${RESTAURANT_NAME_EN}!</div>
     <div class="thank-you-ar">شكراً لاختياركم ${RESTAURANT_NAME_AR}</div>
-    <div class="powered-by">Contact Number ${Contact_number}</div>
+    <div class="powered-by">Contact: ${CONTACT_NUMBER}</div>
+    <div class="powered-by">Powered by ${POWERED_BY}</div>
   </div>
 </body>
 </html>
