@@ -1,20 +1,64 @@
 /**
  * Receipt Utility for RIWA POS
  * Supports 80mm thermal printers (Sunmi NT310 / Foodics Cloud Printer)
+ * Works with USB, Ethernet, and Cloud printing via browser print dialog
  * ESC/POS compatible with cash drawer kick
  */
 
 // Restaurant Info
-const RESTAURANT_NAME_AR = 'قصر الكاتم والبخاري';
-const Contact_number = '98964488 - 24740958';
+const RESTAURANT_NAME_EN = 'Al-Katem & Al-Bukhari';
+const RESTAURANT_NAME_AR = 'الكاتم والبخاري';
+const RESTAURANT_SUBTITLE = 'Maboos Grills';
+const POWERED_BY = 'RIWA POS';
+
+/**
+ * Generate sequential bill number in format XXX-YYYY
+ * Stored in localStorage to persist across sessions
+ */
+export const generateBillNumber = () => {
+  const storageKey = 'riwa_pos_bill_counter';
+  let counter = JSON.parse(localStorage.getItem(storageKey) || '{"prefix": 1, "number": 0}');
+  
+  counter.number++;
+  
+  // Reset to next prefix when reaching 999
+  if (counter.number > 999) {
+    counter.prefix++;
+    counter.number = 1;
+  }
+  
+  localStorage.setItem(storageKey, JSON.stringify(counter));
+  
+  const prefix = counter.prefix.toString().padStart(3, '0');
+  const number = counter.number.toString().padStart(3, '0');
+  
+  return `${prefix}-${number}`;
+};
+
+/**
+ * Get order source display name
+ */
+const getOrderSourceName = (source) => {
+  const sources = {
+    'walkin': 'Walk In',
+    'website': 'Website',
+    'talabat': 'Talabat',
+    'cari': 'Cari',
+    'jahez': 'Jahez',
+    'katch': 'Katch',
+    'other': 'Other'
+  };
+  return sources[source] || source || 'Walk In';
+};
 
 /**
  * Generate receipt HTML for 80mm thermal printer
  * @param {Object} order - Order data
  * @param {string} cashierName - Name of the cashier
+ * @param {string} billNumber - The bill number (XXX-YYY format)
  * @returns {string} HTML string for receipt
  */
-export const generateReceiptHTML = (order, cashierName = 'Cashier') => {
+export const generateReceiptHTML = (order, cashierName = 'Cashier', billNumber = null) => {
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-GB', { 
     day: '2-digit', 
@@ -27,14 +71,12 @@ export const generateReceiptHTML = (order, cashierName = 'Cashier') => {
     hour12: true 
   }).toLowerCase();
 
-  const billNo = order.order_number?.replace('ORD-', '').replace(/-/g, '') || 
-                 Math.random().toString(36).substring(2, 8).toUpperCase();
-
+  // Use provided bill number or generate new one
+  const billNo = billNumber || order.bill_number || generateBillNumber();
   const payMode = order.payment_method === 'cash' ? 'Cash' : 'Card';
-  const orderType = order.order_type === 'qsr' ? 'Quick Bill' : 
-                    order.order_type === 'takeaway' ? 'Takeaway' : 'Delivery';
+  const orderSource = getOrderSourceName(order.order_source);
 
-  // Calculate totals
+  // Calculate totals (no tax)
   let totalQty = 0;
   let itemsHTML = '';
   
@@ -57,7 +99,8 @@ export const generateReceiptHTML = (order, cashierName = 'Cashier') => {
     `;
   });
 
-  const grandTotal = (order.total || order.total_amount || 0).toFixed(3);
+  // Grand total (no tax)
+  const grandTotal = (order.total || order.total_amount || order.subtotal || 0).toFixed(3);
 
   return `
 <!DOCTYPE html>
@@ -75,6 +118,16 @@ export const generateReceiptHTML = (order, cashierName = 'Cashier') => {
       size: 80mm auto;
       margin: 0;
     }
+    @media print {
+      body {
+        width: 80mm;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
     body {
       font-family: 'Courier New', Courier, monospace;
       font-size: 12px;
@@ -91,7 +144,7 @@ export const generateReceiptHTML = (order, cashierName = 'Cashier') => {
       margin-bottom: 8px;
     }
     .restaurant-name {
-      font-size: 18px;
+      font-size: 16px;
       font-weight: bold;
       margin-bottom: 2px;
     }
@@ -111,12 +164,8 @@ export const generateReceiptHTML = (order, cashierName = 'Cashier') => {
       text-align: center;
       margin: 10px 0;
     }
-    .bill-type {
-      font-size: 13px;
-      font-weight: bold;
-    }
     .bill-number {
-      font-size: 16px;
+      font-size: 18px;
       font-weight: bold;
       margin: 4px 0;
     }
@@ -199,36 +248,29 @@ export const generateReceiptHTML = (order, cashierName = 'Cashier') => {
       font-size: 11px;
       margin-top: 4px;
     }
-    .Contact-number {
+    .powered-by {
       font-size: 10px;
       color: #666;
       margin-top: 8px;
-    }
-    @media print {
-      body {
-        width: 80mm;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-      }
     }
   </style>
 </head>
 <body>
   <div class="header">
+    <div class="restaurant-name">${RESTAURANT_NAME_EN}</div>
+    <div class="restaurant-subtitle">${RESTAURANT_SUBTITLE}</div>
     <div class="arabic restaurant-name">${RESTAURANT_NAME_AR}</div>
     <div class="date-time">${dateStr} at ${timeStr}</div>
   </div>
 
   <div class="bill-info">
-    <div class="bill-type">${orderType}</div>
-    <div class="bill-number">Bill No:${billNo}</div>
-    <div style="font-size: 11px; color: #666;">${orderType}: ${billNo}</div>
+    <div class="bill-number">Bill No: ${billNo}</div>
   </div>
 
   <div class="dashed"></div>
 
   <div class="meta-row">
-    <span><strong>${orderType}</strong></span>
+    <span>Source: ${orderSource}</span>
     <span>User: ${cashierName}</span>
   </div>
   <div class="meta-row">
@@ -269,8 +311,9 @@ export const generateReceiptHTML = (order, cashierName = 'Cashier') => {
 
   <div class="footer">
     <div class="thank-you">Thank you for choosing</div>
+    <div class="thank-you">${RESTAURANT_NAME_EN}!</div>
     <div class="thank-you-ar">شكراً لاختياركم ${RESTAURANT_NAME_AR}</div>
-    <div class="Contact-number">Contact number ${Contact_number}</div>
+    <div class="powered-by">Powered by ${POWERED_BY}</div>
   </div>
 </body>
 </html>
@@ -278,43 +321,74 @@ export const generateReceiptHTML = (order, cashierName = 'Cashier') => {
 };
 
 /**
- * Print receipt and trigger cash drawer
- * For Sunmi NT310 / Foodics 80mm Cloud Printer
+ * Print receipt with auto-print and cash drawer support
+ * Works with Sunmi NT310 and other ESC/POS compatible printers
+ * Supports USB, Ethernet, and Cloud printing via browser print dialog
+ * 
  * @param {Object} order - Order data
  * @param {string} cashierName - Cashier name
- * @param {boolean} openDrawer - Whether to trigger cash drawer
+ * @param {boolean} openDrawer - Whether to trigger cash drawer (handled by printer when printing)
+ * @returns {string} The generated bill number
  */
 export const printReceipt = (order, cashierName = 'Cashier', openDrawer = true) => {
-  const receiptHTML = generateReceiptHTML(order, cashierName);
+  const billNumber = generateBillNumber();
+  const receiptHTML = generateReceiptHTML(order, cashierName, billNumber);
   
   // Create print window
-  const printWindow = window.open('', '_blank', 'width=320,height=600');
+  const printWindow = window.open('', '_blank', 'width=320,height=600,menubar=no,toolbar=no,location=no,status=no');
   
   if (!printWindow) {
     console.error('Failed to open print window. Check popup blocker.');
-    return false;
+    // Try using an iframe as fallback
+    printViaIframe(receiptHTML);
+    return billNumber;
   }
 
   printWindow.document.write(receiptHTML);
   printWindow.document.close();
 
-  // Wait for content to load, then print
+  // Auto-print when content loads
   printWindow.onload = () => {
-    // For ESC/POS printers, the browser print dialog will send to the thermal printer
-    // The cash drawer kick command is sent via the printer driver when using ESC/POS
-    // For Sunmi NT310: ESC p 0 25 250 (hex: 1B 70 00 19 FA)
-    
+    // Small delay to ensure rendering is complete
     setTimeout(() => {
-      printWindow.print();
+      try {
+        // The browser print dialog will send to the default printer
+        // For Sunmi NT310: ESC/POS drawer kick is sent via printer driver settings
+        // Configure the Sunmi printer driver to kick drawer on print job
+        printWindow.focus();
+        printWindow.print();
+      } catch (e) {
+        console.error('Print error:', e);
+      }
       
-      // Close window after printing
+      // Close window after print dialog
       setTimeout(() => {
         printWindow.close();
       }, 1000);
-    }, 250);
+    }, 100);
   };
 
-  return true;
+  return billNumber;
+};
+
+/**
+ * Fallback print method using iframe
+ */
+const printViaIframe = (html) => {
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:80mm;height:auto;';
+  document.body.appendChild(iframe);
+  
+  iframe.contentDocument.write(html);
+  iframe.contentDocument.close();
+  
+  iframe.onload = () => {
+    setTimeout(() => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+      setTimeout(() => document.body.removeChild(iframe), 1000);
+    }, 100);
+  };
 };
 
 /**
@@ -337,6 +411,9 @@ export const printKDSTicket = (item) => {
   <title>KDS Ticket</title>
   <style>
     @page { size: 80mm auto; margin: 0; }
+    @media print {
+      body { width: 80mm; }
+    }
     body {
       font-family: 'Courier New', monospace;
       font-size: 14px;
@@ -396,21 +473,37 @@ export const printKDSTicket = (item) => {
 </html>
   `;
 
-  const printWindow = window.open('', '_blank', 'width=320,height=400');
+  const printWindow = window.open('', '_blank', 'width=320,height=400,menubar=no,toolbar=no');
   if (printWindow) {
     printWindow.document.write(html);
     printWindow.document.close();
     printWindow.onload = () => {
       setTimeout(() => {
+        printWindow.focus();
         printWindow.print();
         setTimeout(() => printWindow.close(), 1000);
-      }, 250);
+      }, 100);
     };
   }
 };
 
+/**
+ * Order source options for selection
+ */
+export const ORDER_SOURCES = [
+  { value: 'walkin', label: 'Walk In', labelAr: 'زيارة مباشرة' },
+  { value: 'website', label: 'Website', labelAr: 'الموقع' },
+  { value: 'talabat', label: 'Talabat', labelAr: 'طلبات' },
+  { value: 'cari', label: 'Cari', labelAr: 'كاري' },
+  { value: 'jahez', label: 'Jahez', labelAr: 'جاهز' },
+  { value: 'katch', label: 'Katch', labelAr: 'كاتش' },
+  { value: 'other', label: 'Other', labelAr: 'أخرى' },
+];
+
 export default {
   generateReceiptHTML,
+  generateBillNumber,
   printReceipt,
-  printKDSTicket
+  printKDSTicket,
+  ORDER_SOURCES
 };
