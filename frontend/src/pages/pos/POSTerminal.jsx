@@ -579,29 +579,34 @@ const POSTerminal = () => {
             </div>
           </div>
 
-          {/* Items Grid */}
+          {/* Items Grid - Standardized Card Sizes */}
           <ScrollArea className="flex-1 p-2 md:p-4">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 md:gap-4">
+            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-3">
               {filteredItems.map((item) => (
                 <button
                   key={item.id}
                   onClick={() => openItemModal(item)}
-                  className="pos-item-card border border-border/30 text-left p-2 md:p-4"
+                  className="pos-item-card border border-border/30 text-left p-2 flex flex-col h-[140px] md:h-[160px]"
                   data-testid={`item-${item.id}`}
                 >
-                  {item.image_url && (
-                    <div className="aspect-square rounded-lg bg-secondary/50 mb-2 md:mb-3 overflow-hidden">
+                  {/* Fixed height image container */}
+                  <div className="w-full h-[60px] md:h-[70px] rounded-lg bg-secondary/50 mb-2 overflow-hidden flex-shrink-0">
+                    {item.image_url ? (
                       <img
                         src={item.image_url}
                         alt={item.name}
                         className="w-full h-full object-cover"
                       />
-                    </div>
-                  )}
-                  <h3 className="font-semibold text-xs md:text-sm mb-1 line-clamp-2">
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">
+                        {(item.name || '').charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <h3 className="font-semibold text-xs mb-1 line-clamp-2 flex-grow">
                     {language === 'ar' ? item.name_ar || item.name : item.name}
                   </h3>
-                  <p className="text-primary font-bold text-sm md:text-base ltr-nums">
+                  <p className="text-primary font-bold text-sm ltr-nums flex-shrink-0">
                     {(item.price || 0).toFixed(3)} {t('KWD', 'د.ك')}
                   </p>
                 </button>
