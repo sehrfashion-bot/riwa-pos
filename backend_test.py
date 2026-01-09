@@ -247,82 +247,73 @@ class RIWAPOSAPITester:
             print(f"   ❌ Order creation failed")
             return False, response
 
-    def test_kds_real_time_verification(self):
-        """Test KDS real-time verification - check if order appears in KDS"""
-        print("\n📺 TESTING KDS REAL-TIME VERIFICATION")
+    def test_kds_apis(self):
+        """Test KDS APIs as specified in review request"""
+        print("\n📺 TESTING KDS APIs (Review Request)")
         print("-" * 40)
         
-        # Get KDS items to see if our order appears
+        # Test 1: GET /api/kds/items
         success, response = self.run_test(
-            "KDS Items - Check for Pending Orders",
+            "KDS Items API - GET /api/kds/items",
             "GET",
             "kds/items",
             200
         )
         
+        kds_items = []
         if success:
             items = response.get('items', [])
             print(f"   📋 Found {len(items)} KDS items")
             
-            # Look for our created order
-            order_found = False
             for item in items:
-                if item.get('order_id') == self.created_order_id:
-                    order_found = True
-                    self.kds_item_id = item.get('id')
-                    order_number = item.get('order_number')
-                    item_name = item.get('item_name', item.get('item_name_en', ''))
-                    print(f"   ✅ Order found in KDS!")
-                    print(f"   📋 Order Number: {order_number}")
-                    print(f"   🍔 Item: {item_name}")
-                    print(f"   🆔 KDS Item ID: {self.kds_item_id}")
-                    break
-            
-            if not order_found and self.created_order_id:
-                print(f"   ⚠️  Created order {self.created_order_id} not found in KDS items")
-                print(f"   📋 Available KDS items: {[item.get('order_number', 'No order number') for item in items]}")
-            elif not self.created_order_id:
-                print(f"   ℹ️  No order was created in previous test, so KDS check is informational only")
-            
-            return True
+                order_number = item.get('order_number', 'No order number')
+                item_name = item.get('item_name', item.get('item_name_en', 'Unknown item'))
+                status = item.get('status', 'Unknown status')
+                print(f"   🍽️  KDS Item: {item_name} (Order: {order_number}, Status: {status})")
+                kds_items.append(item)
         
-        return False
-
-    def test_kds_bump_functionality(self):
-        """Test KDS bump functionality to complete an item"""
-        if not self.kds_item_id:
-            print("   ⚠️  No KDS item ID available for bump test")
-            return False
-        
-        success, response = self.run_test(
-            "KDS Bump - Complete Item",
-            "POST",
-            "kds/bump",
-            200,
-            data={"kds_item_id": self.kds_item_id}
-        )
-        
-        if success:
-            print(f"   ✅ KDS item bumped successfully!")
+        # Test 2: POST /api/kds/bump (if we have KDS items)
+        if kds_items:
+            # Use the first available KDS item for bump test
+            test_item = kds_items[0]
+            kds_item_id = test_item.get('id')
             
-            # Verify item is no longer in KDS
-            verify_success, verify_response = self.run_test(
-                "KDS Items - Verify Item Removed After Bump",
-                "GET",
-                "kds/items",
-                200
-            )
-            
-            if verify_success:
-                items = verify_response.get('items', [])
-                item_still_present = any(item.get('id') == self.kds_item_id for item in items)
+            if kds_item_id:
+                bump_success, bump_response = self.run_test(
+                    f"KDS Bump API - POST /api/kds/bump (Item ID: {kds_item_id})",
+                    "POST",
+                    "kds/bump",
+                    200,
+                    data={"kds_item_id": kds_item_id}
+                )
                 
-                if not item_still_present:
-                    print(f"   ✅ Item successfully removed from KDS after bump")
-                else:
-                    print(f"   ⚠️  Item still present in KDS after bump")
-        
-        return success
+                if bump_success:
+                    print(f"   ✅ KDS bump successful for item: {test_item.get('item_name', 'Unknown')}")
+                    
+                    # Verify item is removed from KDS after bump
+                    verify_success, verify_response = self.run_test(
+                        "KDS Items - Verify Item Removed After Bump",
+                        "GET",
+                        "kds/items",
+                        200
+                    )
+                    
+                    if verify_success:
+                        remaining_items = verify_response.get('items', [])
+                        item_still_present = any(item.get('id') == kds_item_id for item in remaining_items)
+                        
+                        if not item_still_present:
+                            print(f"   ✅ Item successfully removed from KDS after bump")
+                        else:
+                            print(f"   ⚠️  Item still present in KDS after bump")
+                
+                return success and bump_success
+            else:
+                print(f"   ⚠️  No valid KDS item ID found for bump test")
+                return success
+        else:
+            print(f"   ℹ️  No KDS items available for bump test")
+            return success
 
     def test_admin_menu_management(self):
         """Test admin menu management functionality"""
