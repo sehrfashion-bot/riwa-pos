@@ -53,9 +53,10 @@ class EmailLoginRequest(BaseModel):
 
 class OrderCreateRequest(BaseModel):
     order_type: str  # qsr, takeaway, delivery
+    order_source: Optional[str] = 'walkin'  # walkin, website, talabat, cari, jahez, katch, other
     items: List[Dict[str, Any]]
     subtotal: float
-    tax: float
+    tax: float = 0
     service_charge: float = 0
     delivery_fee: float = 0
     total: float
