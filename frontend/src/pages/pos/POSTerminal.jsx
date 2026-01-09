@@ -774,6 +774,35 @@ const POSTerminal = () => {
           </DialogHeader>
           
           <div className="space-y-4">
+            {/* Order Source Selection */}
+            <div>
+              <label className="text-sm font-medium mb-2 block">
+                {t('Order Source', 'مصدر الطلب')}
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {ORDER_SOURCES.map((source) => (
+                  <Button
+                    key={source.value}
+                    variant={orderSource === source.value ? 'default' : 'outline'}
+                    className={`h-10 text-xs ${orderSource === source.value ? 'bg-primary' : ''}`}
+                    onClick={() => setOrderSource(source.value)}
+                    data-testid={`source-${source.value}`}
+                  >
+                    {language === 'ar' ? source.labelAr : source.label}
+                  </Button>
+                ))}
+              </div>
+              {orderSource === 'other' && (
+                <Input
+                  placeholder={t('Enter source name', 'أدخل اسم المصدر')}
+                  value={customOrderSource}
+                  onChange={(e) => setCustomOrderSource(e.target.value)}
+                  className="mt-2 h-10 bg-secondary"
+                  data-testid="custom-source"
+                />
+              )}
+            </div>
+
             {/* Payment Method */}
             <div className="flex gap-2">
               <Button
