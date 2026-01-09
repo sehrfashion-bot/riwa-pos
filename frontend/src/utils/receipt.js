@@ -6,10 +6,8 @@
  */
 
 // Restaurant Info
-const RESTAURANT_NAME_EN = 'Al-Katem & Al-Bukhari';
 const RESTAURANT_NAME_AR = 'الكاتم والبخاري';
-const RESTAURANT_SUBTITLE = 'Maboos Grills';
-const POWERED_BY = 'RIWA POS';
+const Contact_number = '98964488 - 24740958';
 
 /**
  * Generate sequential bill number in format XXX-YYYY
@@ -257,8 +255,6 @@ export const generateReceiptHTML = (order, cashierName = 'Cashier', billNumber =
 </head>
 <body>
   <div class="header">
-    <div class="restaurant-name">${RESTAURANT_NAME_EN}</div>
-    <div class="restaurant-subtitle">${RESTAURANT_SUBTITLE}</div>
     <div class="arabic restaurant-name">${RESTAURANT_NAME_AR}</div>
     <div class="date-time">${dateStr} at ${timeStr}</div>
   </div>
@@ -313,7 +309,7 @@ export const generateReceiptHTML = (order, cashierName = 'Cashier', billNumber =
     <div class="thank-you">Thank you for choosing</div>
     <div class="thank-you">${RESTAURANT_NAME_EN}!</div>
     <div class="thank-you-ar">شكراً لاختياركم ${RESTAURANT_NAME_AR}</div>
-    <div class="powered-by">Powered by ${POWERED_BY}</div>
+    <div class="powered-by">Contact Number ${Contact_number}</div>
   </div>
 </body>
 </html>
