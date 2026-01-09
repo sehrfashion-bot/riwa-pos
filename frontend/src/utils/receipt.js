@@ -5,10 +5,8 @@
  */
 
 // Restaurant Info
-const RESTAURANT_NAME_EN = 'Al-Katem & Al-Bukhari';
-const RESTAURANT_NAME_AR = 'الكاتم والبخاري';
-const RESTAURANT_SUBTITLE = 'Maboos Grills';
-const POWERED_BY = 'RIWA POS';
+const RESTAURANT_NAME_AR = 'قصر الكاتم والبخاري';
+const Contact_number = '98964488 - 24740958';
 
 /**
  * Generate receipt HTML for 80mm thermal printer
@@ -201,7 +199,7 @@ export const generateReceiptHTML = (order, cashierName = 'Cashier') => {
       font-size: 11px;
       margin-top: 4px;
     }
-    .powered-by {
+    .Contact-number {
       font-size: 10px;
       color: #666;
       margin-top: 8px;
@@ -217,8 +215,6 @@ export const generateReceiptHTML = (order, cashierName = 'Cashier') => {
 </head>
 <body>
   <div class="header">
-    <div class="restaurant-name">${RESTAURANT_NAME_EN}</div>
-    <div class="restaurant-subtitle">${RESTAURANT_SUBTITLE}</div>
     <div class="arabic restaurant-name">${RESTAURANT_NAME_AR}</div>
     <div class="date-time">${dateStr} at ${timeStr}</div>
   </div>
@@ -273,9 +269,8 @@ export const generateReceiptHTML = (order, cashierName = 'Cashier') => {
 
   <div class="footer">
     <div class="thank-you">Thank you for choosing</div>
-    <div class="thank-you">${RESTAURANT_NAME_EN}!</div>
     <div class="thank-you-ar">شكراً لاختياركم ${RESTAURANT_NAME_AR}</div>
-    <div class="powered-by">Powered by ${POWERED_BY}</div>
+    <div class="Contact-number">Contact number ${Contact_number}</div>
   </div>
 </body>
 </html>
