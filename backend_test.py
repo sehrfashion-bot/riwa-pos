@@ -148,9 +148,9 @@ class RIWAPOSAPITester:
         
         return success, response
 
-    def test_complete_order_flow(self):
-        """Test complete order flow: login -> add Classic Burger -> payment -> verify order"""
-        print("\n🔄 TESTING COMPLETE ORDER FLOW")
+    def test_order_creation_with_bill_number(self):
+        """Test order creation with bill number in XXX-YYY format and verify no tax/service_charge"""
+        print("\n🔄 TESTING ORDER CREATION WITH BILL NUMBER")
         print("-" * 40)
         
         # Step 1: Login (already done in main flow)
@@ -169,9 +169,10 @@ class RIWAPOSAPITester:
         
         print(f"   🍔 Using item: {item_name} - ID: {item_id}, Price: {item_price} KWD")
         
-        # Step 3: Create order with the available item
+        # Step 3: Create order with order_source field and NO tax/service_charge (Kuwait requirement)
         order_data = {
             "order_type": "qsr",
+            "order_source": "walkin",  # Required field for review request
             "items": [
                 {
                     "item_id": item_id,
@@ -182,17 +183,17 @@ class RIWAPOSAPITester:
                 }
             ],
             "subtotal": item_price,
-            "tax": round(item_price * 0.05, 3),  # 5% tax
-            "service_charge": 0,
+            "tax": 0,  # No tax in Kuwait
+            "service_charge": 0,  # No service charge
             "delivery_fee": 0,
-            "total": round(item_price * 1.05, 3),
+            "total": item_price,  # Total equals subtotal (no tax/service charge)
             "payment_method": "cash",
             "cash_received": 5.000,
-            "change_due": round(5.000 - (item_price * 1.05), 3)
+            "change_due": round(5.000 - item_price, 3)
         }
         
         success, response = self.run_test(
-            "Complete Order Flow - Create Order",
+            "Order Creation with Bill Number (Review Request)",
             "POST",
             "orders/create",
             200,
@@ -200,11 +201,39 @@ class RIWAPOSAPITester:
         )
         
         if success and response.get('success'):
-            self.created_order_id = response.get('order', {}).get('id')
-            order_number = response.get('order', {}).get('order_number')
+            order = response.get('order', {})
+            self.created_order_id = order.get('id')
+            order_number = order.get('order_number')
+            bill_number = order.get('bill_number')
+            order_source = order.get('order_source')
+            
             print(f"   ✅ Order created successfully!")
             print(f"   📋 Order ID: {self.created_order_id}")
             print(f"   🏷️  Order Number: {order_number}")
+            print(f"   🧾 Bill Number: {bill_number}")
+            print(f"   📍 Order Source: {order_source}")
+            
+            # Verify bill_number is in XXX-YYY format
+            if bill_number and '-' in bill_number:
+                parts = bill_number.split('-')
+                if len(parts) == 2 and len(parts[0]) == 3 and len(parts[1]) == 3:
+                    print(f"   ✅ Bill number format verified: {bill_number} (XXX-YYY format)")
+                else:
+                    print(f"   ⚠️  Bill number format issue: {bill_number} (expected XXX-YYY)")
+            else:
+                print(f"   ⚠️  Bill number missing or invalid format: {bill_number}")
+            
+            # Verify no tax/service_charge in response
+            if 'tax' not in response or response.get('tax', 0) == 0:
+                print(f"   ✅ No tax in response (Kuwait requirement)")
+            else:
+                print(f"   ⚠️  Tax found in response: {response.get('tax')}")
+                
+            if 'service_charge' not in response or response.get('service_charge', 0) == 0:
+                print(f"   ✅ No service charge in response (Kuwait requirement)")
+            else:
+                print(f"   ⚠️  Service charge found in response: {response.get('service_charge')}")
+            
             return True, response
         else:
             print(f"   ❌ Order creation failed")
