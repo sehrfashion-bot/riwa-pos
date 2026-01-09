@@ -104,37 +104,8 @@ async def supabase_request(method: str, endpoint: str, data: Optional[Dict] = No
         return response
 
 def generate_order_number() -> str:
-    """Generate unique order number"""
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d")
-    random_suffix = str(uuid.uuid4())[:4].upper()
-    return f"ORD-{timestamp}-{random_suffix}"
-
-# Global bill counter (stored in memory, will be loaded from DB on startup)
-_bill_counter = {"prefix": 1, "number": 0}
-
-async def generate_bill_number() -> str:
-    """Generate sequential bill number in XXX-YYY format"""
+    """Generate unique order number in XXX-YYY format"""
     global _bill_counter
-    
-    try:
-        # Try to get the last bill number from orders
-        response = await supabase_request(
-            "GET",
-            f"orders?tenant_id=eq.{TENANT_ID}&select=bill_number&order=created_at.desc&limit=1",
-            use_service_key=True
-        )
-        
-        if response.status_code == 200 and response.json():
-            last_bill = response.json()[0].get('bill_number', '')
-            if last_bill and '-' in last_bill:
-                try:
-                    parts = last_bill.split('-')
-                    _bill_counter["prefix"] = int(parts[0])
-                    _bill_counter["number"] = int(parts[1])
-                except:
-                    pass
-    except:
-        pass
     
     # Increment counter
     _bill_counter["number"] += 1
@@ -148,6 +119,9 @@ async def generate_bill_number() -> str:
     number = str(_bill_counter["number"]).zfill(3)
     
     return f"{prefix}-{number}"
+
+# Global bill counter (stored in memory, persists during runtime)
+_bill_counter = {"prefix": 1, "number": 0}
 
 # ==================== AUTH ENDPOINTS ====================
 
