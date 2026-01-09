@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../componen
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { Badge } from '../../components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../../components/ui/sheet';
-import { printReceipt } from '../../utils/receipt';
+import { printReceipt, ORDER_SOURCES } from '../../utils/receipt';
 
 // Supabase client for realtime
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://sqhjsctsxlnivcbeclrn.supabase.co';
