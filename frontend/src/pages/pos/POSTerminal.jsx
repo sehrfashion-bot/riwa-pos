@@ -145,13 +145,10 @@ const POSTerminal = () => {
     setCart([]);
   };
 
-  // Calculate totals
+  // Calculate totals - NO TAX or SERVICE CHARGE (Kuwait)
   const subtotal = cart.reduce((sum, item) => sum + item.total_price, 0);
-  const taxRate = 0.00; // 0% VAT
-  const tax = subtotal * taxRate;
-  const serviceCharge = orderType === 'qsr' ? 0 : subtotal * 0.1;
   const deliveryFee = orderType === 'delivery' ? 1.5 : 0;
-  const total = subtotal + tax + serviceCharge + deliveryFee;
+  const total = subtotal + deliveryFee;
   const changeDue = paymentMethod === 'cash' && cashReceived ? parseFloat(cashReceived) - total : 0;
 
   const calculateItemTotal = () => {
