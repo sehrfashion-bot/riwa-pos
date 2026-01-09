@@ -226,6 +226,8 @@ const POSTerminal = () => {
     setCustomerName('');
     setCustomerPhone('');
     setCustomerAddress('');
+    setOrderSource('walkin');
+    setCustomOrderSource('');
   };
 
   const processOrder = async () => {
@@ -236,8 +238,11 @@ const POSTerminal = () => {
 
     setProcessingOrder(true);
 
+    const finalOrderSource = orderSource === 'other' ? customOrderSource : orderSource;
+
     const orderData = {
       order_type: orderType,
+      order_source: finalOrderSource,
       items: cart.map(item => ({
         item_id: item.item_id,
         name: item.name,
@@ -251,8 +256,6 @@ const POSTerminal = () => {
         notes: item.notes,
       })),
       subtotal,
-      tax,
-      service_charge: serviceCharge,
       delivery_fee: deliveryFee,
       total,
       payment_method: paymentMethod,
@@ -281,6 +284,7 @@ const POSTerminal = () => {
       const orderForPrint = {
         ...orderData,
         order_number: data.order.order_number,
+        bill_number: data.order.bill_number,
         total_amount: total,
       };
       
@@ -289,7 +293,7 @@ const POSTerminal = () => {
       printReceipt(orderForPrint, user?.name || 'Cashier', shouldOpenDrawer);
       
       toast.success(
-        t(`Order ${data.order.order_number} created!`, `تم إنشاء الطلب ${data.order.order_number}!`)
+        t(`Order ${data.order.bill_number || data.order.order_number} created!`, `تم إنشاء الطلب!`)
       );
       
       clearCart();
