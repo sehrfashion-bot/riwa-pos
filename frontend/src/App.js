@@ -78,17 +78,23 @@ function App() {
     localStorage.removeItem('riwa_user');
   }, []);
 
-  // Load user from storage
+  // Load user from storage - persistent login
   useEffect(() => {
     const storedUser = localStorage.getItem('riwa_user');
-    if (storedUser && token) {
+    const storedToken = localStorage.getItem('riwa_token');
+    
+    if (storedUser && storedToken) {
       try {
-        setUser(JSON.parse(storedUser));
+        const userData = JSON.parse(storedUser);
+        setUser(userData);
+        setToken(storedToken);
       } catch (e) {
-        logout();
+        // Invalid stored data - clear it
+        localStorage.removeItem('riwa_user');
+        localStorage.removeItem('riwa_token');
       }
     }
-  }, [token, logout]);
+  }, []);
 
   const appValue = {
     user,
