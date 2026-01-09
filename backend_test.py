@@ -454,14 +454,16 @@ class RIWAPOSAPITester:
         return success
 
 def main():
-    print("🚀 Starting RIWA POS API Testing - Review Request Focus")
-    print("=" * 60)
-    print("🎯 Testing Focus Areas:")
-    print("   1. Complete Order Flow with Real-time KDS")
-    print("   2. Admin Menu Management")
-    print("   3. KDS Real-time Verification")
-    print("   4. Verify Prices from Supabase")
-    print("=" * 60)
+    print("🚀 Starting RIWA POS API Testing - Review Request Specific Tests")
+    print("=" * 70)
+    print("🎯 Review Request Testing Focus:")
+    print("   1. Order Creation with Bill Number (XXX-YYY format)")
+    print("   2. Login: POST /api/auth/pin-login with Cashier 1/1234")
+    print("   3. Admin Item Management APIs")
+    print("   4. Menu APIs (verify no tax)")
+    print("   5. KDS APIs (GET /api/kds/items, POST /api/kds/bump)")
+    print("   API URL: https://fastpos-riwa.preview.emergentagent.com")
+    print("=" * 70)
     
     # Setup
     tester = RIWAPOSAPITester()
@@ -472,52 +474,55 @@ def main():
     tester.test_health_check()
     tester.test_root_endpoint()
     
-    # Authentication tests (must be first to get token)
-    print("\n🔐 AUTHENTICATION TESTS")
-    print("-" * 30)
+    # 1. Authentication tests - PIN login with Cashier 1/1234
+    print("\n🔐 1. AUTHENTICATION TEST - PIN LOGIN")
+    print("-" * 40)
     pin_success, pin_response = tester.test_pin_login()
     
-    # Menu API tests - Verify prices from Supabase
-    print("\n🍽️ MENU API TESTS - VERIFY PRICES FROM SUPABASE")
-    print("-" * 50)
+    # 2. Menu API tests - Verify no tax (Kuwait requirement)
+    print("\n🍽️ 2. MENU API TESTS - VERIFY NO TAX")
+    print("-" * 40)
     tester.test_menu_categories()
-    menu_success, menu_response = tester.test_menu_items()
+    menu_success, menu_response = tester.test_menu_items_no_tax()
     
-    # Complete Order Flow Test
+    # 3. Order Creation with Bill Number test
+    print("\n📦 3. ORDER CREATION WITH BILL NUMBER")
+    print("-" * 40)
     if pin_success and menu_success:
-        order_success, order_response = tester.test_complete_order_flow()
+        order_success, order_response = tester.test_order_creation_with_bill_number()
     else:
-        print("❌ Skipping order flow test - prerequisites failed")
+        print("❌ Skipping order creation test - prerequisites failed")
         order_success = False
     
-    # KDS Real-time Verification
-    if order_success:
-        tester.test_kds_real_time_verification()
-        tester.test_kds_bump_functionality()
-    else:
-        print("❌ Skipping KDS tests - no order created")
+    # 4. Admin Item Management Tests
+    print("\n👨‍💼 4. ADMIN ITEM MANAGEMENT")
+    print("-" * 40)
+    admin_success = tester.test_admin_menu_management()
     
-    # Admin Menu Management Tests
-    tester.test_admin_menu_management()
+    # 5. KDS APIs Test
+    print("\n📺 5. KDS APIs TEST")
+    print("-" * 40)
+    kds_success = tester.test_kds_apis()
     
-    # Additional API tests for completeness
-    print("\n📦 ADDITIONAL API TESTS")
-    print("-" * 30)
+    # Additional verification tests
+    print("\n📦 ADDITIONAL VERIFICATION TESTS")
+    print("-" * 40)
     tester.test_orders_endpoint()
     tester.test_admin_dashboard()
     
     # Print final results
-    print("\n" + "=" * 60)
+    print("\n" + "=" * 70)
     print(f"📊 FINAL RESULTS")
     print(f"Tests passed: {tester.tests_passed}/{tester.tests_run}")
     print(f"Success rate: {(tester.tests_passed/tester.tests_run)*100:.1f}%")
     
-    # Summary of key test results
-    print(f"\n🎯 KEY TEST RESULTS:")
-    print(f"   🔐 PIN Login (Cashier 1/1234): {'✅ PASS' if pin_success else '❌ FAIL'}")
-    print(f"   🍽️  Menu Items with Prices: {'✅ PASS' if menu_success else '❌ FAIL'}")
-    print(f"   📦 Complete Order Flow: {'✅ PASS' if order_success else '❌ FAIL'}")
-    print(f"   📺 KDS Integration: {'✅ TESTED' if order_success else '❌ SKIPPED'}")
+    # Summary of review request test results
+    print(f"\n🎯 REVIEW REQUEST TEST RESULTS:")
+    print(f"   🔐 1. PIN Login (Cashier 1/1234): {'✅ PASS' if pin_success else '❌ FAIL'}")
+    print(f"   🍽️  2. Menu Items (No Tax): {'✅ PASS' if menu_success else '❌ FAIL'}")
+    print(f"   📦 3. Order Creation (Bill Number): {'✅ PASS' if order_success else '❌ FAIL'}")
+    print(f"   👨‍💼 4. Admin Item Management: {'✅ PASS' if admin_success else '❌ FAIL'}")
+    print(f"   📺 5. KDS APIs: {'✅ PASS' if kds_success else '❌ FAIL'}")
     
     if tester.failed_tests:
         print(f"\n❌ FAILED TESTS:")
