@@ -417,22 +417,12 @@ const POSTerminal = () => {
 
       {/* Cart Footer */}
       <div className="p-4 border-t border-border/30 space-y-3">
-        {/* Totals */}
+        {/* Totals - No Tax (Kuwait) */}
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">{t('Subtotal', 'المجموع الفرعي')}</span>
             <span className="ltr-nums">{subtotal.toFixed(3)}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">{t('Tax (5%)', 'الضريبة (5%)')}</span>
-            <span className="ltr-nums">{tax.toFixed(3)}</span>
-          </div>
-          {serviceCharge > 0 && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">{t('Service (10%)', 'الخدمة (10%)')}</span>
-              <span className="ltr-nums">{serviceCharge.toFixed(3)}</span>
-            </div>
-          )}
           {deliveryFee > 0 && (
             <div className="flex justify-between">
               <span className="text-muted-foreground">{t('Delivery', 'التوصيل')}</span>
