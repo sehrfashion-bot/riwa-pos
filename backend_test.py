@@ -108,10 +108,10 @@ class RIWAPOSAPITester:
         )
         return success, response
 
-    def test_menu_items(self):
-        """Test menu items endpoint and verify prices from Supabase"""
+    def test_menu_items_no_tax(self):
+        """Test menu items endpoint and verify no tax (Kuwait requirement)"""
         success, response = self.run_test(
-            "Menu Items (Verify Prices from Supabase)",
+            "Menu Items - Verify No Tax (Kuwait Requirement)",
             "GET",
             "menu/items",
             200
@@ -121,10 +121,16 @@ class RIWAPOSAPITester:
             items = response['items']
             print(f"   📋 Found {len(items)} items")
             
-            # Look for any burger item and verify price structure
+            # Verify no tax fields in items
+            tax_found = False
             for item in items:
                 item_name = item.get('name', '')
                 print(f"   🍽️  Available item: {item_name}")
+                
+                # Check for tax-related fields
+                if 'tax' in item or 'tax_rate' in item or 'tax_amount' in item:
+                    tax_found = True
+                    print(f"   ⚠️  Tax field found in item: {item_name}")
                 
                 if 'burger' in item_name.lower() or 'classic' in item_name.lower():
                     self.classic_burger_item = item
@@ -137,7 +143,9 @@ class RIWAPOSAPITester:
                         print(f"   ✅ Price mapping from base_price working correctly")
                     else:
                         print(f"   ⚠️  Price mapping issue - price: {price}, base_price: {base_price}")
-                    break
+            
+            if not tax_found:
+                print(f"   ✅ No tax fields found in menu items (Kuwait requirement)")
             
             # If no burger found, use the first available item
             if not self.classic_burger_item and items:
