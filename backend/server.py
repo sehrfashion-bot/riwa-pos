@@ -1340,6 +1340,330 @@ async def get_receipt_data(order_id: str):
         logger.error(f"Receipt error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ==================== PRINTER ENDPOINTS ====================
+
+@api_router.get("/printers")
+async def get_printers():
+    """Get all printer configurations"""
+    try:
+        response = await supabase_request(
+            "GET",
+            f"printer_configs?tenant_id=eq.{TENANT_ID}&order=created_at.desc",
+            use_service_key=True
+        )
+        printers = response.json() if response.status_code == 200 else []
+        return {"printers": printers}
+    except Exception as e:
+        logger.error(f"Get printers error: {e}")
+        return {"printers": []}
+
+@api_router.post("/printers")
+async def create_printer(config: PrinterConfig):
+    """Create a printer configuration"""
+    try:
+        printer_data = {
+            "id": str(uuid.uuid4()),
+            "tenant_id": TENANT_ID,
+            "branch_id": BRANCH_ID,
+            "name": config.name,
+            "description": config.description,
+            "ip_address": config.ip_address,
+            "port": config.port,
+            "model": config.model,
+            "location": config.location,
+            "default_for_channel": config.default_for_channel,
+            "enabled": config.enabled,
+            "open_drawer_before": config.open_drawer_before,
+            "open_drawer_after": config.open_drawer_after,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        response = await supabase_request("POST", "printer_configs", printer_data, use_service_key=True)
+        
+        if response.status_code not in [200, 201]:
+            logger.error(f"Create printer failed: {response.status_code} - {response.text}")
+            raise HTTPException(status_code=500, detail="Failed to create printer")
+        
+        return {"success": True, "printer": response.json()[0] if response.json() else printer_data}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Create printer error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.patch("/printers/{printer_id}")
+async def update_printer(printer_id: str, config: Dict[str, Any]):
+    """Update a printer configuration"""
+    try:
+        config['updated_at'] = datetime.now(timezone.utc).isoformat()
+        
+        response = await supabase_request(
+            "PATCH",
+            f"printer_configs?id=eq.{printer_id}&tenant_id=eq.{TENANT_ID}",
+            config,
+            use_service_key=True
+        )
+        
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Update printer error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/printers/{printer_id}")
+async def delete_printer(printer_id: str):
+    """Delete a printer configuration"""
+    try:
+        await supabase_request(
+            "DELETE",
+            f"printer_configs?id=eq.{printer_id}&tenant_id=eq.{TENANT_ID}",
+            use_service_key=True
+        )
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Delete printer error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/printers/test")
+async def test_printer(request: PrinterTestRequest):
+    """Test printer connection via TCP"""
+    import socket
+    
+    try:
+        # Create TCP socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)  # 5 second timeout
+        
+        try:
+            # Try to connect
+            sock.connect((request.ip_address, request.port))
+            
+            # ESC/POS test print command
+            # Initialize printer + Print "RIWA POS - Test Print" + Cut paper
+            test_data = b'\x1B\x40'  # Initialize printer
+            test_data += b'\x1B\x61\x01'  # Center align
+            test_data += b'\x1B\x21\x30'  # Double height/width
+            test_data += b'RIWA POS\n'
+            test_data += b'\x1B\x21\x00'  # Normal text
+            test_data += b'Test Print Successful\n'
+            test_data += b'-------------------\n'
+            test_data += f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n'.encode()
+            test_data += b'\n\n\n'
+            test_data += b'\x1D\x56\x00'  # Cut paper
+            
+            sock.send(test_data)
+            sock.close()
+            
+            return {
+                "success": True,
+                "message": f"Successfully connected to printer at {request.ip_address}:{request.port}. Test receipt printed."
+            }
+            
+        except socket.timeout:
+            return {
+                "success": False,
+                "message": f"Connection timeout. Printer at {request.ip_address}:{request.port} is not responding."
+            }
+        except socket.error as e:
+            return {
+                "success": False,
+                "message": f"Connection failed: {str(e)}"
+            }
+        finally:
+            sock.close()
+            
+    except Exception as e:
+        logger.error(f"Test printer error: {e}")
+        return {"success": False, "message": str(e)}
+
+@api_router.post("/prints/queue")
+async def queue_print_job(request: PrintJobRequest):
+    """Queue a print job for server-side printing"""
+    try:
+        job_data = {
+            "id": str(uuid.uuid4()),
+            "tenant_id": TENANT_ID,
+            "branch_id": BRANCH_ID,
+            "printer_id": request.printer_id,
+            "order_id": request.order_id,
+            "print_type": request.print_type,
+            "open_drawer": request.open_drawer,
+            "receipt_data": json.dumps(request.receipt_data) if request.receipt_data else None,
+            "status": "pending",
+            "retry_count": 0,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        response = await supabase_request("POST", "printer_queues", job_data, use_service_key=True)
+        
+        if response.status_code not in [200, 201]:
+            logger.error(f"Queue print job failed: {response.status_code} - {response.text}")
+            raise HTTPException(status_code=500, detail="Failed to queue print job")
+        
+        return {"success": True, "job_id": job_data['id']}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Queue print job error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/prints/queue")
+async def get_print_queue():
+    """Get print queue jobs"""
+    try:
+        response = await supabase_request(
+            "GET",
+            f"printer_queues?tenant_id=eq.{TENANT_ID}&order=created_at.desc&limit=50",
+            use_service_key=True
+        )
+        return {"jobs": response.json() if response.status_code == 200 else []}
+    except Exception as e:
+        logger.error(f"Get print queue error: {e}")
+        return {"jobs": []}
+
+@api_router.post("/prints/direct")
+async def direct_print(request: PrintJobRequest):
+    """Print directly to a printer via TCP (server-side printing)"""
+    import socket
+    
+    try:
+        # Get printer config
+        printer_response = await supabase_request(
+            "GET",
+            f"printer_configs?id=eq.{request.printer_id}&tenant_id=eq.{TENANT_ID}",
+            use_service_key=True
+        )
+        
+        if printer_response.status_code != 200 or not printer_response.json():
+            raise HTTPException(status_code=404, detail="Printer not found")
+        
+        printer = printer_response.json()[0]
+        
+        if not printer.get('enabled'):
+            raise HTTPException(status_code=400, detail="Printer is disabled")
+        
+        # Get order data if not provided
+        receipt_data = request.receipt_data
+        if not receipt_data:
+            order = await get_order(request.order_id)
+            receipt_data = order
+        
+        # Build ESC/POS receipt data
+        esc_pos_data = generate_escpos_receipt(receipt_data, printer.get('open_drawer_before', False), printer.get('open_drawer_after', True) or request.open_drawer)
+        
+        # Send to printer via TCP
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(10)
+        
+        try:
+            sock.connect((printer['ip_address'], printer['port']))
+            sock.send(esc_pos_data)
+            sock.close()
+            
+            # Update print job status if in queue
+            await supabase_request(
+                "PATCH",
+                f"printer_queues?order_id=eq.{request.order_id}&printer_id=eq.{request.printer_id}",
+                {"status": "completed", "printed_at": datetime.now(timezone.utc).isoformat()},
+                use_service_key=True
+            )
+            
+            return {"success": True, "message": "Print job sent successfully"}
+            
+        except socket.error as e:
+            logger.error(f"Print error: {e}")
+            return {"success": False, "message": f"Failed to print: {str(e)}"}
+        finally:
+            sock.close()
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Direct print error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+def generate_escpos_receipt(order_data: Dict, drawer_before: bool = False, drawer_after: bool = True) -> bytes:
+    """Generate ESC/POS formatted receipt data"""
+    
+    data = b''
+    
+    # Open drawer before if configured
+    if drawer_before:
+        data += b'\x1B\x70\x00\x19\xFA'  # ESC p 0 25 250 - Kick drawer
+    
+    # Initialize printer
+    data += b'\x1B\x40'  # ESC @ - Initialize
+    
+    # Header - Center align, double size
+    data += b'\x1B\x61\x01'  # Center align
+    data += b'\x1B\x21\x30'  # Double height/width
+    data += 'Al-Katem & Al-Bukhari\n'.encode('utf-8')
+    data += b'\x1B\x21\x00'  # Normal size
+    data += 'Maboos Grills\n'.encode('utf-8')
+    data += '\xd8\xa7\xd9\x84\xd9\x83\xd8\xa7\xd8\xaa\xd9\x85 \xd9\x88\xd8\xa7\xd9\x84\xd8\xa8\xd8\xae\xd8\xa7\xd8\xb1\xd9\x8a\n'.encode('utf-8')  # Arabic name
+    
+    # Separator
+    data += b'--------------------------------\n'
+    
+    # Order info
+    data += b'\x1B\x61\x00'  # Left align
+    order_number = order_data.get('order_number', order_data.get('bill_number', 'N/A'))
+    data += f'Bill No: {order_number}\n'.encode('utf-8')
+    data += f'Date: {datetime.now().strftime("%d %b %Y %I:%M %p")}\n'.encode('utf-8')
+    
+    order_source = order_data.get('order_source', order_data.get('channel', 'POS'))
+    data += f'Source: {order_source}\n'.encode('utf-8')
+    
+    # Separator
+    data += b'--------------------------------\n'
+    
+    # Items header
+    data += b'Item                 Qty   Total\n'
+    data += b'--------------------------------\n'
+    
+    # Items
+    items = order_data.get('items', [])
+    total_qty = 0
+    for item in items:
+        name = item.get('name', item.get('item_name_en', 'Item'))[:20]
+        qty = item.get('quantity', 1)
+        total = item.get('total_price', 0)
+        total_qty += qty
+        
+        # Format: Item name (20 chars) + Qty (5 chars) + Total (7 chars)
+        line = f'{name:<20} {qty:>3}   {total:>6.3f}\n'
+        data += line.encode('utf-8')
+    
+    # Separator
+    data += b'--------------------------------\n'
+    
+    # Totals
+    subtotal = order_data.get('subtotal', order_data.get('total_amount', 0))
+    grand_total = order_data.get('total', order_data.get('total_amount', subtotal))
+    
+    data += f'Total Items: {total_qty}\n'.encode('utf-8')
+    data += b'\x1B\x21\x10'  # Double height
+    data += f'Grand Total: KWD {grand_total:.3f}\n'.encode('utf-8')
+    data += b'\x1B\x21\x00'  # Normal
+    
+    # Footer
+    data += b'--------------------------------\n'
+    data += b'\x1B\x61\x01'  # Center
+    data += b'Thank you for choosing us!\n'
+    data += '\xd8\xb4\xd9\x83\xd8\xb1\xd8\xa7\xd9\x8b \xd9\x84\xd8\xa7\xd8\xae\xd8\xaa\xd9\x8a\xd8\xa7\xd8\xb1\xd9\x83\xd9\x85\n'.encode('utf-8')  # Arabic thank you
+    data += b'Powered by RIWA POS\n'
+    data += b'\n\n\n'
+    
+    # Open drawer after if configured
+    if drawer_after:
+        data += b'\x1B\x70\x00\x19\xFA'  # ESC p 0 25 250 - Kick drawer
+    
+    # Cut paper
+    data += b'\x1D\x56\x00'  # GS V 0 - Full cut
+    
+    return data
+
 # ==================== HEALTH CHECK ====================
 
 @api_router.get("/health")
