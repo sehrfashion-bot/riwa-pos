@@ -18,6 +18,7 @@ import AdminLoyalty from './pages/admin/AdminLoyalty';
 import AdminDevices from './pages/admin/AdminDevices';
 import AdminSettings from './pages/admin/AdminSettings';
 import AdminReports from './pages/admin/AdminReports';
+import AdminPrinters from './pages/admin/AdminPrinters';
 
 // Context
 const AppContext = createContext(null);
