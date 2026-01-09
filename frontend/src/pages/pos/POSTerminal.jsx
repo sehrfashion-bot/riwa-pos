@@ -284,14 +284,26 @@ const POSTerminal = () => {
       // Auto-print receipt and trigger cash drawer (for cash payments)
       const orderForPrint = {
         ...orderData,
+        id: data.order.id,
         order_number: data.order.order_number,
         bill_number: data.order.bill_number,
         total_amount: total,
       };
       
-      // Print receipt - this also triggers cash drawer kick via ESC/POS
-      const shouldOpenDrawer = paymentMethod === 'cash';
-      printReceipt(orderForPrint, user?.name || 'Cashier', shouldOpenDrawer);
+      // Try network printer first (auto-print to configured printer)
+      const isCashPayment = paymentMethod === 'cash';
+      autoPrintReceipt(orderForPrint, isCashPayment).then(result => {
+        if (result.success) {
+          console.log('Network print successful');
+        } else {
+          // Fallback to browser print if network print fails
+          console.log('Network print failed, using browser print');
+          printReceipt(orderForPrint, user?.name || 'Cashier', isCashPayment);
+        }
+      }).catch(() => {
+        // Fallback to browser print
+        printReceipt(orderForPrint, user?.name || 'Cashier', isCashPayment);
+      });
       
       toast.success(
         t(`Order ${data.order.bill_number || data.order.order_number} created!`, `تم إنشاء الطلب!`)
