@@ -436,20 +436,18 @@ async def create_order(request: OrderCreateRequest, authorization: str = Header(
                 pass
         
         order_number = generate_order_number()
-        bill_number = await generate_bill_number()
         order_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
         
         # Create order matching the existing schema (no tax in Kuwait)
+        # Note: bill_number and order_source columns need to be added via SQL
         order_data = {
             "id": order_id,
             "tenant_id": TENANT_ID,
             "branch_id": user_branch_id,
             "order_number": order_number,
-            "bill_number": bill_number,
             "order_type": request.order_type.lower(),
-            "order_source": request.order_source or 'walkin',
-            "channel": "pos",
+            "channel": request.order_source or 'pos',  # Use channel for order source
             "status": "pending",
             "payment_status": "paid" if request.payment_method else "pending",
             "subtotal": request.subtotal,
