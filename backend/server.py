@@ -104,7 +104,7 @@ async def supabase_request(method: str, endpoint: str, data: Optional[Dict] = No
         return response
 
 def generate_order_number() -> str:
-    """Generate unique order number in XXX-YYY format"""
+    """Generate unique order number in XXX-YYY format with timestamp to ensure uniqueness"""
     global _bill_counter
     
     # Increment counter
@@ -115,10 +115,12 @@ def generate_order_number() -> str:
         _bill_counter["prefix"] += 1
         _bill_counter["number"] = 1
     
+    # Add timestamp suffix for uniqueness
+    timestamp = datetime.now(timezone.utc).strftime("%H%M%S")
     prefix = str(_bill_counter["prefix"]).zfill(3)
     number = str(_bill_counter["number"]).zfill(3)
     
-    return f"{prefix}-{number}"
+    return f"{prefix}-{number}-{timestamp}"
 
 # Global bill counter (stored in memory, persists during runtime)
 _bill_counter = {"prefix": 1, "number": 0}
