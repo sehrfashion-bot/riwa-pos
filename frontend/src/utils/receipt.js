@@ -6,6 +6,7 @@
  */
 
 // Restaurant Info
+const RESTAURANT_NAME_EN = 'Al-Katem & Al-Bukhari Palace';
 const RESTAURANT_NAME_AR = 'الكاتم والبخاري';
 const Contact_number = '98964488 - 24740958';
 
