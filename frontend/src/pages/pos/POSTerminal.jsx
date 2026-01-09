@@ -32,6 +32,8 @@ const POSTerminal = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState([]);
   const [orderType, setOrderType] = useState('qsr');
+  const [orderSource, setOrderSource] = useState('walkin');
+  const [customOrderSource, setCustomOrderSource] = useState('');
   const [loading, setLoading] = useState(true);
   const [cartOpen, setCartOpen] = useState(false);
   
