@@ -14,6 +14,7 @@ import { ScrollArea } from '../../components/ui/scroll-area';
 import { Badge } from '../../components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../../components/ui/sheet';
 import { printReceipt, ORDER_SOURCES } from '../../utils/receipt';
+import { autoPrintReceipt } from '../../utils/networkPrinter';
 
 // Supabase client for realtime
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://sqhjsctsxlnivcbeclrn.supabase.co';
