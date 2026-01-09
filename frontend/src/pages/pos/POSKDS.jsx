@@ -125,21 +125,37 @@ const POSKDS = () => {
     };
   }, [station, buzzerEnabled]);
 
+  // Stop buzzer when no pending items
+  useEffect(() => {
+    if (kdsItems.length === 0 && buzzerIntervalRef.current) {
+      stopBuzzer();
+    }
+  }, [kdsItems]);
+
   // Buzzer functions
   const playBuzzer = () => {
+    if (kdsItems.length === 0) return; // Don't buzz if no items
+    
     setNewOrderAlert(true);
     
     if (buzzerRef.current) {
       buzzerRef.current.play().catch(() => {});
       
-      buzzerIntervalRef.current = setInterval(() => {
-        buzzerRef.current.play().catch(() => {});
-      }, 1000);
+      // Only create interval if not already running
+      if (!buzzerIntervalRef.current) {
+        buzzerIntervalRef.current = setInterval(() => {
+          if (kdsItems.length > 0) {
+            buzzerRef.current.play().catch(() => {});
+          } else {
+            stopBuzzer();
+          }
+        }, 2000); // Slower interval (2 seconds)
+      }
       
-      // Stop after 15 seconds
+      // Stop after 30 seconds max
       setTimeout(() => {
         stopBuzzer();
-      }, 15000);
+      }, 30000);
     }
   };
 
@@ -166,9 +182,15 @@ const POSKDS = () => {
       if (!response.ok) throw new Error('Failed to bump item');
       
       // Remove from local state immediately
-      setKdsItems(items => items.filter(i => i.id !== itemId));
+      setKdsItems(items => {
+        const newItems = items.filter(i => i.id !== itemId);
+        // Stop buzzer if all items are collected
+        if (newItems.length === 0) {
+          stopBuzzer();
+        }
+        return newItems;
+      });
       toast.success(t('Item completed', 'تم إكمال الصنف'));
-      stopBuzzer();
     } catch (error) {
       toast.error(t('Failed to complete item', 'فشل إكمال الصنف'));
     }
