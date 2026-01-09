@@ -137,6 +137,7 @@ function App() {
               <Route path="/admin/coupons" element={<AdminCoupons />} />
               <Route path="/admin/loyalty" element={<AdminLoyalty />} />
               <Route path="/admin/devices" element={<AdminDevices />} />
+              <Route path="/admin/printers" element={<AdminPrinters />} />
               <Route path="/admin/settings" element={<AdminSettings />} />
               <Route path="/admin/reports" element={<AdminReports />} />
               
