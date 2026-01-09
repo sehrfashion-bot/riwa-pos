@@ -499,7 +499,7 @@ async def create_order(request: OrderCreateRequest, authorization: str = Header(
             "order": {
                 "id": order_id,
                 "order_number": order_number,
-                "bill_number": bill_number,
+                "bill_number": order_number,  # Use order_number as bill_number
                 "order_source": request.order_source,
                 "status": "pending",
                 "total": request.total
