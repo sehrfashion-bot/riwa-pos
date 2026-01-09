@@ -26,7 +26,7 @@ const AdminLayout = ({ children, title }) => {
     { path: '/admin/delivery-zones', icon: MapPin, label: t('Delivery Zones', 'مناطق التوصيل') },
     { path: '/admin/coupons', icon: Ticket, label: t('Coupons', 'الكوبونات') },
     { path: '/admin/loyalty', icon: Heart, label: t('Loyalty', 'الولاء') },
-    { path: '/admin/devices', icon: Printer, label: t('Devices', 'الأجهزة') },
+    { path: '/admin/printers', icon: Printer, label: t('Printers', 'الطابعات') },
     { path: '/admin/settings', icon: Settings, label: t('Settings', 'الإعدادات') },
     { path: '/admin/reports', icon: FileText, label: t('Reports', 'التقارير') },
   ];
