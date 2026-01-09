@@ -75,6 +75,30 @@ class OrderStatusUpdateRequest(BaseModel):
 class KDSBumpRequest(BaseModel):
     kds_item_id: str
 
+# Printer Models
+class PrinterConfig(BaseModel):
+    name: str
+    description: Optional[str] = None
+    ip_address: str
+    port: int = 9100
+    model: str = "NT310"  # Sunmi NT310
+    location: str = "cashier"  # cashier, kitchen
+    default_for_channel: str = "pos"  # pos, kds
+    enabled: bool = True
+    open_drawer_before: bool = False
+    open_drawer_after: bool = True
+
+class PrinterTestRequest(BaseModel):
+    ip_address: str
+    port: int = 9100
+
+class PrintJobRequest(BaseModel):
+    printer_id: str
+    order_id: str
+    print_type: str = "receipt"  # receipt, kds_ticket
+    open_drawer: bool = False
+    receipt_data: Optional[Dict[str, Any]] = None
+
 # ==================== HELPER FUNCTIONS ====================
 
 async def supabase_request(method: str, endpoint: str, data: Optional[Dict] = None, use_service_key: bool = False):
