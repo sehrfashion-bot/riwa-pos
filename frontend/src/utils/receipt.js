@@ -6,9 +6,11 @@
  */
 
 // Restaurant Info
-const RESTAURANT_NAME_EN = 'Al-Katem & Al-Bukhari Palace';
+const RESTAURANT_NAME_EN = 'Al-Katem & Al-Bukhari';
 const RESTAURANT_NAME_AR = 'الكاتم والبخاري';
-const Contact_number = '98964488 - 24740958';
+const RESTAURANT_SUBTITLE = 'Maboos Grills';
+const POWERED_BY = 'RIWA POS';
+const CONTACT_NUMBER = '98964488 - 24740958';
 
 /**
  * Generate sequential bill number in format XXX-YYYY
