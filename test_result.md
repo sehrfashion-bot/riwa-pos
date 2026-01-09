@@ -265,6 +265,9 @@ frontend:
       - working: true
         agent: "testing"
         comment: "✅ TESTED: Payment modal working perfectly. Cash/Card options visible, order creation successful with toast confirmation 'Order ORD-20260108-88F7 created!'. Payment modal closes after successful order creation."
+      - working: true
+        agent: "testing"
+        comment: "✅ RE-TESTED (Review Request): CRITICAL BUG FIXED! Order creation flow now working perfectly. Fixed missing RESTAURANT_NAME_EN constant in receipt.js that was causing JavaScript error. Complete flow: Login → Add Item → Payment → Order Creation → Success Toast → Cart Clear → Modal Close. Order 001-010-145218 created successfully!"
 
   - task: "POS Responsiveness (mobile/tablet)"
     implemented: true
